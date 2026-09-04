@@ -22,52 +22,63 @@ def home():
 def health():
     return jsonify({"status": "ok"})
 
+# --- RUTA DEL WEBHOOK ---
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    """Maneja las actualizaciones entrantes de Telegram."""
+    try:
+        # Obtener los datos de la solicitud
+        json_data = request.get_json()
+        if not json_data:
+            return "No data", 400
+        
+        # Crear el objeto Update
+        update = Update.de_json(json_data, application.bot)
+        
+        # Procesar la actualización de forma asíncrona
+        asyncio.run(application.process_update(update))
+        return "OK", 200
+    except Exception as e:
+        logging.error(f"Error en webhook: {e}")
+        return f"Error: {str(e)}", 500
+
 # --- COMANDOS DEL BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔍 OSINT", callback_data='osint_menu')],
         [InlineKeyboardButton("🔧 Red y Seguridad", callback_data='security_menu')],
-        [InlineKeyboardButton("❓ Ayuda", callback_data='help_menu')],
     ]
     await update.message.reply_text(
         "🕵️ *OSINT Ninja Bot v4.0*\n\n"
         "🔹 *Estado:* 🟢 Activo\n"
-        "🔹 *Servidor:* Render\n\n"
         "Selecciona una categoría:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 *Pong!*\n\n✅ El bot está activo y funcionando correctamente.", parse_mode='Markdown')
+    await update.message.reply_text("🏓 *Pong!*\n\n✅ El bot está activo.", parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📖 *Ayuda - OSINT Ninja Bot*\n\n"
-        "🔍 *Comandos OSINT:*\n"
-        "/dni <dni> - Consulta RENAPER (simulado)\n"
-        "/ip <ip> - Geolocalización (API real)\n"
-        "/email <email> - Verificar filtraciones (API real)\n\n"
-        "🔧 *Comandos de Red:*\n"
-        "/scan <URL/IP> - Escaneo de puertos\n\n"
-        "📌 *Generales:*\n"
-        "/start - Menú principal\n"
-        "/ping - Estado del bot\n"
-        "/help - Esta ayuda",
+        "📖 *Ayuda*\n\n"
+        "/start - Menú\n"
+        "/ping - Estado\n"
+        "/dni <dni>\n"
+        "/ip <ip>\n"
+        "/scan <URL/IP>",
         parse_mode='Markdown'
     )
 
-# --- FUNCIONES OSINT ---
 async def dni_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("❌ *Uso:* `/dni <número>`", parse_mode='Markdown')
         return
     dni = context.args[0]
     await update.message.reply_text(
-        f"📄 *Resultados RENAPER - DNI {dni}:*\n\n"
+        f"📄 *Resultados DNI {dni}:*\n\n"
         f"👤 *Nombre:* Juan Pérez\n"
         f"🆔 *DNI:* {dni}\n"
-        f"🔑 *CUIL:* 20-{dni}-4\n"
         f"📍 *Domicilio:* Av. Corrientes 1234, CABA\n\n"
         "⚠️ *Datos simulados*",
         parse_mode='Markdown'
@@ -154,24 +165,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
-    elif action == 'help_menu':
-        keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data='start_menu')]]
-        await query.edit_message_text(
-            "📖 *Ayuda*\n\n"
-            "Comandos disponibles:\n"
-            "/start - Menú\n"
-            "/ping - Estado\n"
-            "/dni <dni>\n"
-            "/ip <ip>\n"
-            "/scan <URL/IP>",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
     elif action == 'start_menu':
         keyboard = [
             [InlineKeyboardButton("🔍 OSINT", callback_data='osint_menu')],
             [InlineKeyboardButton("🔧 Red", callback_data='security_menu')],
-            [InlineKeyboardButton("❓ Ayuda", callback_data='help_menu')],
         ]
         await query.edit_message_text(
             "🕵️ *OSINT Ninja Bot v4.0*\n\n"
@@ -191,18 +188,7 @@ application.add_handler(CommandHandler("ip", ip_command))
 application.add_handler(CommandHandler("scan", scan_command))
 application.add_handler(CallbackQueryHandler(button_handler))
 
-# --- RUTA DEL WEBHOOK ---
-@app.route(f'/{TOKEN}', methods=['POST'])
-async def webhook():
-    try:
-        update = Update.de_json(request.get_json(), application.bot)
-        await application.process_update(update)
-        return "OK", 200
-    except Exception as e:
-        logging.error(f"Error en webhook: {e}")
-        return "Error", 500
-
-# --- FUNCIÓN PARA CONFIGURAR EL WEBHOOK ---
+# --- INICIALIZACIÓN DEL WEBHOOK ---
 async def setup_webhook():
     service_name = os.getenv('RENDER_SERVICE_NAME', 'ninjabase-bot')
     webhook_url = f"https://{service_name}.onrender.com/{TOKEN}"
@@ -211,7 +197,7 @@ async def setup_webhook():
 
 # --- INICIALIZACIÓN ASÍNCRONA ---
 async def initialize_bot():
-    async with application:  # <--- ¡¡¡USANDO ASYNC WITH!!!
+    async with application:
         await application.initialize()
         await setup_webhook()
         logging.info("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
