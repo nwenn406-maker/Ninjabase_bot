@@ -1,9 +1,9 @@
 import os
 import logging
-from flask import Flask, request, jsonify
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import asyncio
+from flask import Flask, request, jsonify
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -11,7 +11,7 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado en Render")
 
-# --- FLASK SERVER (Para que Render no se duerma) ---
+# --- FLASK SERVER ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -22,15 +22,17 @@ def home():
 def health():
     return jsonify({"status": "ok"})
 
-# --- COMANDOS DEL BOT (igual que antes) ---
+# --- COMANDOS DEL BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔍 OSINT", callback_data='osint_menu')],
         [InlineKeyboardButton("🔧 Red y Seguridad", callback_data='security_menu')],
+        [InlineKeyboardButton("❓ Ayuda", callback_data='help_menu')],
     ]
     await update.message.reply_text(
         "🕵️ *OSINT Ninja Bot v4.0*\n\n"
         "🔹 *Estado:* 🟢 Activo\n"
+        "🔹 *Servidor:* Render\n\n"
         "Selecciona una categoría:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
@@ -39,15 +41,105 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🏓 *Pong!*\n\n✅ El bot está activo y funcionando correctamente.", parse_mode='Markdown')
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📖 *Ayuda - OSINT Ninja Bot*\n\n"
+        "🔍 *Comandos OSINT:*\n"
+        "/dni <dni> - Consulta RENAPER (simulado)\n"
+        "/ip <ip> - Geolocalización (API real)\n"
+        "/email <email> - Verificar filtraciones (API real)\n\n"
+        "🔧 *Comandos de Red:*\n"
+        "/scan <URL/IP> - Escaneo de puertos\n\n"
+        "📌 *Generales:*\n"
+        "/start - Menú principal\n"
+        "/ping - Estado del bot\n"
+        "/help - Esta ayuda",
+        parse_mode='Markdown'
+    )
+
+# --- FUNCIONES OSINT ---
+async def dni_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ *Uso:* `/dni <número>`", parse_mode='Markdown')
+        return
+    dni = context.args[0]
+    await update.message.reply_text(
+        f"📄 *Resultados RENAPER - DNI {dni}:*\n\n"
+        f"👤 *Nombre:* Juan Pérez\n"
+        f"🆔 *DNI:* {dni}\n"
+        f"🔑 *CUIL:* 20-{dni}-4\n"
+        f"📍 *Domicilio:* Av. Corrientes 1234, CABA\n\n"
+        "⚠️ *Datos simulados*",
+        parse_mode='Markdown'
+    )
+
+async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ *Uso:* `/ip <dirección_ip>`", parse_mode='Markdown')
+        return
+    ip = context.args[0]
+    await update.message.reply_text(f"📍 Geolocalizando IP *{ip}*...", parse_mode='Markdown')
+    
+    try:
+        import requests
+        response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
+        data = response.json()
+        if data.get('status') == 'success':
+            await update.message.reply_text(
+                f"📍 *Geolocalización IP {ip}:*\n\n"
+                f"🌍 *País:* {data.get('country', 'N/A')}\n"
+                f"🗺️ *Región:* {data.get('regionName', 'N/A')}\n"
+                f"🏙️ *Ciudad:* {data.get('city', 'N/A')}\n"
+                f"🔌 *ISP:* {data.get('isp', 'N/A')}",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("❌ No se pudo geolocalizar.", parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}", parse_mode='Markdown')
+
+async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ *Uso:* `/scan <URL/IP>`", parse_mode='Markdown')
+        return
+    target = context.args[0]
+    await update.message.reply_text(f"🔎 Escaneando puertos en *{target}*...\n⏳ Esto puede tomar hasta 60 segundos.", parse_mode='Markdown')
+    
+    try:
+        import socket
+        puertos = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443]
+        abiertos = []
+        ip = socket.gethostbyname(target)
+        for p in puertos:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.5)
+            if sock.connect_ex((ip, p)) == 0:
+                abiertos.append(p)
+            sock.close()
+        
+        servicios = {21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS', 80:'HTTP', 110:'POP3', 135:'RPC', 139:'NetBIOS', 143:'IMAP', 443:'HTTPS', 445:'SMB', 993:'IMAPS', 995:'POP3S', 1723:'PPTP', 3306:'MySQL', 3389:'RDP', 5432:'PostgreSQL', 5900:'VNC', 8080:'HTTP-Proxy', 8443:'HTTPS-Alt'}
+        
+        if abiertos:
+            resultado = f"🔎 *Puertos abiertos en {target}:*\n\n"
+            for p in abiertos:
+                servicio = servicios.get(p, 'Desconocido')
+                resultado += f"✅ Puerto *{p}* → {servicio}\n"
+            await update.message.reply_text(resultado, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"🔒 No se encontraron puertos abiertos.", parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}", parse_mode='Markdown')
+
+# --- MANEJADOR DE BOTONES ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     action = query.data
+
     if action == 'osint_menu':
         keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data='start_menu')]]
         await query.edit_message_text(
             "🔍 *Módulo OSINT*\n\n"
-            "Comandos disponibles:\n"
             "/dni <dni>\n"
             "/ip <ip>\n"
             "/email <email>",
@@ -57,17 +149,29 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == 'security_menu':
         keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data='start_menu')]]
         await query.edit_message_text(
-            "🔧 *Módulo Red y Seguridad*\n\n"
+            "🔧 *Módulo Red*\n\n"
+            "/scan <URL/IP>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    elif action == 'help_menu':
+        keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data='start_menu')]]
+        await query.edit_message_text(
+            "📖 *Ayuda*\n\n"
             "Comandos disponibles:\n"
-            "/scan <URL/IP>\n"
-            "/subdomain <URL>",
+            "/start - Menú\n"
+            "/ping - Estado\n"
+            "/dni <dni>\n"
+            "/ip <ip>\n"
+            "/scan <URL/IP>",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
     elif action == 'start_menu':
         keyboard = [
             [InlineKeyboardButton("🔍 OSINT", callback_data='osint_menu')],
-            [InlineKeyboardButton("🔧 Red y Seguridad", callback_data='security_menu')],
+            [InlineKeyboardButton("🔧 Red", callback_data='security_menu')],
+            [InlineKeyboardButton("❓ Ayuda", callback_data='help_menu')],
         ]
         await query.edit_message_text(
             "🕵️ *OSINT Ninja Bot v4.0*\n\n"
@@ -78,16 +182,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # --- CONFIGURACIÓN DEL BOT ---
-# NOTA: No se ejecuta automáticamente. Se usará un Webhook.
 application = Application.builder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("ping", ping))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("dni", dni_command))
+application.add_handler(CommandHandler("ip", ip_command))
+application.add_handler(CommandHandler("scan", scan_command))
 application.add_handler(CallbackQueryHandler(button_handler))
 
 # --- RUTA DEL WEBHOOK ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 async def webhook():
-    """Maneja las actualizaciones entrantes de Telegram."""
     try:
         update = Update.de_json(request.get_json(), application.bot)
         await application.process_update(update)
@@ -97,31 +203,27 @@ async def webhook():
         return "Error", 500
 
 # --- FUNCIÓN PARA CONFIGURAR EL WEBHOOK ---
-async def set_webhook():
-    """Configura el webhook con la URL pública de la aplicación."""
-    # Obtiene la URL pública de Render desde las variables de entorno
-    webhook_url = f"https://{os.getenv('RENDER_SERVICE_NAME', 'localhost')}.onrender.com/{TOKEN}"
+async def setup_webhook():
+    service_name = os.getenv('RENDER_SERVICE_NAME', 'ninjabase-bot')
+    webhook_url = f"https://{service_name}.onrender.com/{TOKEN}"
     await application.bot.set_webhook(url=webhook_url)
-    logging.info(f"Webhook configurado en: {webhook_url}")
+    logging.info(f"✅ Webhook configurado en: {webhook_url}")
 
-# --- INICIALIZACIÓN DEL BOT Y WEBHOOK ---
-# Esta parte se ejecuta solo una vez, cuando se inicia el servidor Flask.
-# Asegura que el webhook se configure al inicio.
-with application:
-    # Necesitamos un loop de asyncio para ejecutar la función asíncrona
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(application.initialize())
-        loop.run_until_complete(set_webhook())
-        logging.info("✅ Bot y Webhook configurados correctamente.")
-    except Exception as e:
-        logging.error(f"Error al configurar el bot: {e}")
-    finally:
-        loop.close()
+# --- INICIALIZACIÓN ASÍNCRONA ---
+async def initialize_bot():
+    async with application:  # <--- ¡¡¡USANDO ASYNC WITH!!!
+        await application.initialize()
+        await setup_webhook()
+        logging.info("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
+
+# --- EJECUCIÓN ---
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+try:
+    loop.run_until_complete(initialize_bot())
+except Exception as e:
+    logging.error(f"Error al inicializar el bot: {e}")
 
 if __name__ == '__main__':
-    # Este bloque se ejecuta si ejecutas el script directamente.
-    # Útil para pruebas locales, pero Render usará el servidor Flask de arriba.
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
