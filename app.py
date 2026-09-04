@@ -1,42 +1,40 @@
 import os
+import logging
 from flask import Flask, jsonify
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
-    raise ValueError("TELEGRAM_TOKEN no configurado")
+    raise ValueError("❌ TELEGRAM_TOKEN no configurado en Render")
 
-# --- FLASK ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return jsonify({"status": "online"})
+    return jsonify({"status": "online", "bot": "OSINT Ninja Bot"})
 
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
 
-# --- COMANDOS ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Bot activo. Envía /ping para probar.")
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("🤖 Bot activo! Envía /ping para probar.")
 
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 Pong!")
+def ping(update: Update, context: CallbackContext):
+    update.message.reply_text("🏓 Pong!")
 
-# --- CONFIGURACIÓN ---
-bot_app = Application.builder().token(TOKEN).build()
-bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("ping", ping))
+def setup_bot():
+    updater = Updater(TOKEN)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("ping", ping))
+    return updater
 
-# --- INICIO ---
 if __name__ == '__main__':
-    import threading
-    def run_bot():
-        print("🤖 Bot iniciado")
-        bot_app.run_polling()
-    
-    threading.Thread(target=run_bot, daemon=True).start()
+    updater = setup_bot()
+    updater.start_polling()
+    print("🤖 Bot iniciado en Render")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
