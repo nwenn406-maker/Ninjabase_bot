@@ -5,7 +5,6 @@ from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import threading
-import time
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -52,14 +51,29 @@ telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(CommandHandler("ping", ping))
 telegram_app.add_handler(CallbackQueryHandler(button_handler))
 
-# --- INICIO DEL BOT EN SEGUNDO PLANO ---
+# --- INICIO DEL BOT CON EVENT LOOP CORRECTO ---
 def run_bot():
-    """Inicia el bot de Telegram en un hilo separado"""
+    """Inicia el bot de Telegram en un hilo separado con su propio event loop"""
     print("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
-    telegram_app.run_polling()
+    
+    # Crear un nuevo event loop para este hilo
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # Ejecutar el bot en el loop
+    try:
+        loop.run_until_complete(telegram_app.initialize())
+        loop.run_until_complete(telegram_app.start())
+        loop.run_until_complete(telegram_app.updater.start_polling())
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.run_until_complete(telegram_app.shutdown())
+        loop.close()
 
 # --- INICIALIZACIÓN GLOBAL ---
-# Iniciamos el bot en un hilo DAEMON para que no bloquee el servidor web
+# Iniciamos el bot en un hilo DAEMON
 bot_thread = threading.Thread(target=run_bot, daemon=True)
 bot_thread.start()
 
