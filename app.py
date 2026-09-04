@@ -1,9 +1,10 @@
 import os
 import logging
-import asyncio
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import threading
+import asyncio
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -11,7 +12,7 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado en Render")
 
-# --- FLASK SERVER ---
+# --- FLASK SERVER (para mantener Render activo) ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -21,27 +22,6 @@ def home():
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
-
-# --- RUTA DEL WEBHOOK ---
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    try:
-        json_data = request.get_json()
-        if not json_data:
-            return "No data", 400
-        
-        # Crear un nuevo loop para procesar la actualización
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            update = Update.de_json(json_data, application.bot)
-            loop.run_until_complete(application.process_update(update))
-            return "OK", 200
-        finally:
-            loop.close()
-    except Exception as e:
-        logging.error(f"Error en webhook: {e}")
-        return f"Error: {str(e)}", 500
 
 # --- COMANDOS DEL BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -180,37 +160,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # --- CONFIGURACIÓN DEL BOT ---
-application = Application.builder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("ping", ping))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("dni", dni_command))
-application.add_handler(CommandHandler("ip", ip_command))
-application.add_handler(CommandHandler("scan", scan_command))
-application.add_handler(CallbackQueryHandler(button_handler))
+telegram_app = Application.builder().token(TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CommandHandler("ping", ping))
+telegram_app.add_handler(CommandHandler("help", help_command))
+telegram_app.add_handler(CommandHandler("dni", dni_command))
+telegram_app.add_handler(CommandHandler("ip", ip_command))
+telegram_app.add_handler(CommandHandler("scan", scan_command))
+telegram_app.add_handler(CallbackQueryHandler(button_handler))
 
-# --- INICIALIZACIÓN DEL WEBHOOK ---
-async def setup_webhook():
-    service_name = os.getenv('RENDER_SERVICE_NAME', 'ninjabase-bot')
-    webhook_url = f"https://{service_name}.onrender.com/{TOKEN}"
-    await application.bot.set_webhook(url=webhook_url)
-    logging.info(f"✅ Webhook configurado en: {webhook_url}")
-
-# --- INICIALIZACIÓN ASÍNCRONA ---
-async def initialize_bot():
-    async with application:
-        await application.initialize()
-        await setup_webhook()
-        logging.info("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
-
-# --- EJECUCIÓN ---
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-try:
-    loop.run_until_complete(initialize_bot())
-except Exception as e:
-    logging.error(f"Error al inicializar el bot: {e}")
+# --- INICIAR EL BOT EN SEGUNDO PLANO (USANDO POLLING) ---
+def run_bot():
+    print("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
+    telegram_app.run_polling()
 
 if __name__ == '__main__':
+    # Iniciamos el bot en un hilo separado
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    # Iniciamos el servidor Flask
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
