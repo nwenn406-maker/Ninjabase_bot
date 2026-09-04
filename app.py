@@ -25,19 +25,20 @@ def health():
 # --- RUTA DEL WEBHOOK ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
-    """Maneja las actualizaciones entrantes de Telegram."""
     try:
-        # Obtener los datos de la solicitud
         json_data = request.get_json()
         if not json_data:
             return "No data", 400
         
-        # Crear el objeto Update
-        update = Update.de_json(json_data, application.bot)
-        
-        # Procesar la actualización de forma asíncrona
-        asyncio.run(application.process_update(update))
-        return "OK", 200
+        # Crear un nuevo loop para procesar la actualización
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            update = Update.de_json(json_data, application.bot)
+            loop.run_until_complete(application.process_update(update))
+            return "OK", 200
+        finally:
+            loop.close()
     except Exception as e:
         logging.error(f"Error en webhook: {e}")
         return f"Error: {str(e)}", 500
@@ -46,7 +47,7 @@ def webhook():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔍 OSINT", callback_data='osint_menu')],
-        [InlineKeyboardButton("🔧 Red y Seguridad", callback_data='security_menu')],
+        [InlineKeyboardButton("🔧 Red", callback_data='security_menu')],
     ]
     await update.message.reply_text(
         "🕵️ *OSINT Ninja Bot v4.0*\n\n"
