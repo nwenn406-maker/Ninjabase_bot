@@ -1,10 +1,11 @@
 import os
 import logging
+import asyncio
+import threading
 from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import threading
-import asyncio
+import nest_asyncio
 
 # --- CONFIGURACIÓN ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -12,7 +13,7 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado en Render")
 
-# --- FLASK SERVER (para mantener Render activo) ---
+# --- FLASK SERVER ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -169,11 +170,12 @@ telegram_app.add_handler(CommandHandler("ip", ip_command))
 telegram_app.add_handler(CommandHandler("scan", scan_command))
 telegram_app.add_handler(CallbackQueryHandler(button_handler))
 
-# --- INICIAR EL BOT EN SEGUNDO PLANO (USANDO POLLING) ---
+# --- INICIAR EL BOT CON POLLING ---
 def run_bot():
     print("🤖 OSINT Ninja Bot v4.0 iniciado en Render")
     telegram_app.run_polling()
 
+# --- INICIALIZACIÓN ---
 if __name__ == '__main__':
     # Iniciamos el bot en un hilo separado
     bot_thread = threading.Thread(target=run_bot, daemon=True)
