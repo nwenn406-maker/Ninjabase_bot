@@ -5,8 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY app.py .
 
-EXPOSE 8080
-
-CMD gunicorn -w 1 -b 0.0.0.0:8080 app:app --timeout 120
+CMD ["python", "app.py"]
