@@ -1,22 +1,14 @@
 import os
-import logging
-import json
+import random
+import requests
 import sqlite3
+import socket
 import zipfile
 import io
 import csv
-import random
-import requests
-import socket
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from datetime import datetime
-
-# ==================== MODO FANTASMA ====================
-os.environ['PYTHONHASHSEED'] = '0'
-logging.basicConfig(level=logging.CRITICAL)
-logging.getLogger('httpx').setLevel(logging.CRITICAL)
-logging.getLogger('telegram').setLevel(logging.CRITICAL)
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
@@ -27,8 +19,8 @@ DB_NAME = "filtraciones2026.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
+    c = conn.cursor()
+    c.execute('''
         CREATE TABLE IF NOT EXISTS credenciales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             dominio TEXT,
@@ -38,14 +30,15 @@ def init_db():
             hash TEXT UNIQUE
         )
     ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_dominio ON credenciales(dominio)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_dominio ON credenciales(dominio)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
     conn.commit()
     conn.close()
     poblar_base_datos_2026()
 
 def poblar_base_datos_2026():
-    datos = []
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
     dominios = [
         "mobbex.com", "rebill.com", "monei.com", "gmail.com", "hotmail.com",
         "netflix.com", "spotify.com", "paypal.com", "mercadolibre.com",
@@ -54,46 +47,40 @@ def poblar_base_datos_2026():
         "whatsapp.com", "telegram.com", "discord.com", "github.com",
         "reddit.com", "tiktok.com", "youtube.com"
     ]
+    count = 0
     for dominio in dominios:
         for i in range(1, 101):
-            datos.append({
-                "dominio": dominio,
-                "usuario": f"user{i}@{dominio}",
-                "contraseña": f"{dominio.split('.')[0]}{i}2026!",
-                "fecha": f"2026-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-            })
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    count = 0
-    for item in datos:
-        hash_registro = f"{item['dominio']}{item['usuario']}{item['contraseña']}"
-        try:
-            cursor.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)', 
-                          (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
-            count += 1
-        except: pass
+            usuario = f"user{i}@{dominio}"
+            contraseña = f"{dominio.split('.')[0]}{i}2026!"
+            fecha = f"2026-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
+            hash_reg = f"{dominio}{usuario}{contraseña}"
+            try:
+                c.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)',
+                         (dominio, usuario, contraseña, fecha, hash_reg))
+                count += 1
+            except: pass
     conn.commit()
     conn.close()
     print(f"✅ Base de datos 2026 poblada con {count} registros")
 
 def buscar_credenciales(dominio=None, usuario=None, limite=500):
     conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    c = conn.cursor()
     if dominio:
-        cursor.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales WHERE dominio LIKE ? LIMIT ?', (f'%{dominio}%', limite))
+        c.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales WHERE dominio LIKE ? LIMIT ?', (f'%{dominio}%', limite))
     elif usuario:
-        cursor.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales WHERE usuario LIKE ? LIMIT ?', (f'%{usuario}%', limite))
+        c.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales WHERE usuario LIKE ? LIMIT ?', (f'%{usuario}%', limite))
     else:
-        cursor.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales LIMIT ?', (limite,))
-    resultados = cursor.fetchall()
+        c.execute('SELECT dominio, usuario, contraseña, fecha FROM credenciales LIMIT ?', (limite,))
+    resultados = c.fetchall()
     conn.close()
     return [{"dominio": r[0], "usuario": r[1], "contraseña": r[2], "fecha": r[3]} for r in resultados]
 
 def contar_registros():
     conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM credenciales')
-    total = cursor.fetchone()[0]
+    c = conn.cursor()
+    c.execute('SELECT COUNT(*) FROM credenciales')
+    total = c.fetchone()[0]
     conn.close()
     return total
 
@@ -128,7 +115,7 @@ def crear_zip_resultados(resultados, busqueda):
         zip_file.writestr(f"{busqueda}_credenciales.json", json.dumps(resultados, indent=2))
     return zip_buffer.getvalue()
 
-# ==================== FUNCIONES ====================
+# ==================== FUNCIONES DE VULNERABILIDADES ====================
 def buscar_cve(servicio):
     try:
         response = requests.get(f'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={servicio}', timeout=15)
@@ -164,6 +151,7 @@ def escanear_puertos(host):
         return abiertos, servicios
     except: return [], servicios
 
+# ==================== FUNCIONES OSINT ====================
 def geolocalizar_ip(ip):
     try:
         response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
@@ -208,10 +196,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v25.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v26.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"🔹 *Comandos:* /buscar, /scan, /ip, /email, /deuda, /vuln, /vuln_scan, /subdomain\n\n"
+        f"🔹 *Comandos:* 13 disponibles\n\n"
         f"📌 *Categorías:*\n"
         f"🔍 Filtraciones - Buscar credenciales\n"
         f"🛡️ Vulnerabilidades - Buscar CVE\n"
@@ -223,7 +211,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v25.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v26.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -544,7 +532,7 @@ def main():
     application.add_handler(CommandHandler("deuda", deuda_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    print("🤖 NINJA HUNTER BOT v25.0 iniciado en Fly.io")
+    print("🤖 NINJA HUNTER BOT v26.0 iniciado en Fly.io")
     application.run_polling()
 
 if __name__ == '__main__':
