@@ -8,43 +8,22 @@ import csv
 import random
 import requests
 import socket
-import time
-import threading
-import re
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import asyncio
 from datetime import datetime
 
-# ==================== CONFIGURACIÓN OFF ====================
-# Ocultar logs y rastreo
-os.environ['PYTHONHASHSEED'] = '0'
-os.environ['FLASK_ENV'] = 'production'
-os.environ['FLASK_DEBUG'] = '0'
-
-# Desactivar logs de Flask y Telegram
-logging.basicConfig(level=logging.CRITICAL)
-logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
-logging.getLogger('telegram').setLevel(logging.CRITICAL)
-logging.getLogger('httpx').setLevel(logging.CRITICAL)
-
-# ==================== TOKEN (OFUSCADO) ====================
-# Token oculto en variables de entorno con nombre aleatorio
+# ==================== CONFIGURACIÓN ====================
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 
-# ==================== FLASK SERVER (SIN LOGS) ====================
 app = Flask(__name__)
-app.config['PROPAGATE_EXCEPTIONS'] = False
+logging.basicConfig(level=logging.INFO)
 
-# Suprimir logs de Flask
-import warnings
-warnings.filterwarnings("ignore")
-
-# ==================== BASE DE DATOS OFUSCADA ====================
-DB_NAME = "system_cache.db"  # Nombre engañoso
+# ==================== BASE DE DATOS ====================
+DB_NAME = "filtraciones.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -72,12 +51,6 @@ def poblar_base_datos():
         datos_reales.append({"dominio": "mobbex.com", "usuario": f"usuario{i}@mobbex.com", "contraseña": f"Pass{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     for i in range(1, 101):
         datos_reales.append({"dominio": "gmail.com", "usuario": f"user{i}@gmail.com", "contraseña": f"Gmail{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
-    for i in range(1, 101):
-        datos_reales.append({"dominio": "hotmail.com", "usuario": f"user{i}@hotmail.com", "contraseña": f"Hot{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
-    for i in range(1, 101):
-        datos_reales.append({"dominio": "netflix.com", "usuario": f"user{i}@netflix.com", "contraseña": f"Netflix{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
-    for i in range(1, 101):
-        datos_reales.append({"dominio": "paypal.com", "usuario": f"user{i}@paypal.com", "contraseña": f"Paypal{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     count = 0
@@ -113,7 +86,7 @@ def contar_registros():
     conn.close()
     return total
 
-# ==================== SISTEMA DE TOKENS OFUSCADO ====================
+# ==================== SISTEMA DE TOKENS ====================
 user_tokens = {}
 def get_tokens(user_id):
     return user_tokens.get(str(user_id), 10)
@@ -225,7 +198,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v16.0 (MODO FANTASMA)*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v16.0*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
@@ -534,11 +507,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# ==================== WEBHOOK (OCULTO) ====================
+# ==================== WEBHOOK ====================
 
 @app.route('/')
 def home():
-    return jsonify({"status": "online", "version": "16.0"})
+    total = contar_registros()
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "16.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -576,7 +550,7 @@ async def setup_webhook():
     await application.initialize()
     webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
     await application.bot.set_webhook(url=webhook_url)
-    # Sin logs
+    logging.info(f"✅ Webhook configurado: {webhook_url}")
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
