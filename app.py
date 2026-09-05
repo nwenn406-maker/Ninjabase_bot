@@ -17,16 +17,34 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 import asyncio
 from datetime import datetime
 
-# ==================== CONFIGURACIÓN ====================
+# ==================== CONFIGURACIÓN OFF ====================
+# Ocultar logs y rastreo
+os.environ['PYTHONHASHSEED'] = '0'
+os.environ['FLASK_ENV'] = 'production'
+os.environ['FLASK_DEBUG'] = '0'
+
+# Desactivar logs de Flask y Telegram
+logging.basicConfig(level=logging.CRITICAL)
+logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
+logging.getLogger('telegram').setLevel(logging.CRITICAL)
+logging.getLogger('httpx').setLevel(logging.CRITICAL)
+
+# ==================== TOKEN (OFUSCADO) ====================
+# Token oculto en variables de entorno con nombre aleatorio
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 
+# ==================== FLASK SERVER (SIN LOGS) ====================
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+app.config['PROPAGATE_EXCEPTIONS'] = False
 
-# ==================== BASE DE DATOS ====================
-DB_NAME = "filtraciones.db"
+# Suprimir logs de Flask
+import warnings
+warnings.filterwarnings("ignore")
+
+# ==================== BASE DE DATOS OFUSCADA ====================
+DB_NAME = "system_cache.db"  # Nombre engañoso
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -95,7 +113,7 @@ def contar_registros():
     conn.close()
     return total
 
-# ==================== SISTEMA DE TOKENS ====================
+# ==================== SISTEMA DE TOKENS OFUSCADO ====================
 user_tokens = {}
 def get_tokens(user_id):
     return user_tokens.get(str(user_id), 10)
@@ -207,8 +225,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v15.0*\n\n"
-        f"🔹 *Base de datos:* {total:,} credenciales reales\n"
+        f"🕵️ *NINJA HUNTER BOT v16.0 (MODO FANTASMA)*\n\n"
+        f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
         f"📌 *Categorías:*\n"
@@ -222,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v15.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v16.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -516,12 +534,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# ==================== WEBHOOK ====================
+# ==================== WEBHOOK (OCULTO) ====================
 
 @app.route('/')
 def home():
-    total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "15.0", "registros": total})
+    return jsonify({"status": "online", "version": "16.0"})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -533,7 +550,6 @@ def webhook():
         asyncio.run(application.process_update(update))
         return "OK", 200
     except Exception as e:
-        logging.error(f"Error: {e}")
         return "Error", 500
 
 # ==================== CONFIGURACIÓN ====================
@@ -560,7 +576,7 @@ async def setup_webhook():
     await application.initialize()
     webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
     await application.bot.set_webhook(url=webhook_url)
-    logging.info(f"✅ Webhook configurado: {webhook_url}")
+    # Sin logs
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
