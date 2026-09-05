@@ -14,13 +14,20 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 import asyncio
 from datetime import datetime
 
-# ==================== CONFIGURACIÓN ====================
+# ==================== MODO FANTASMA ====================
+os.environ['FLASK_ENV'] = 'production'
+os.environ['FLASK_DEBUG'] = '0'
+logging.basicConfig(level=logging.CRITICAL)
+logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
+logging.getLogger('telegram').setLevel(logging.CRITICAL)
+logging.getLogger('httpx').setLevel(logging.CRITICAL)
+
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+app.config['PROPAGATE_EXCEPTIONS'] = False
 
 # ==================== BASE DE DATOS ====================
 DB_NAME = "filtraciones.db"
@@ -43,27 +50,62 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
     conn.commit()
     conn.close()
-    poblar_base_datos()
+    cargar_datos_reales()
 
-def poblar_base_datos():
-    datos_reales = []
-    for i in range(1, 101):
-        datos_reales.append({"dominio": "mobbex.com", "usuario": f"usuario{i}@mobbex.com", "contraseña": f"Pass{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
-    for i in range(1, 101):
-        datos_reales.append({"dominio": "gmail.com", "usuario": f"user{i}@gmail.com", "contraseña": f"Gmail{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
+def cargar_datos_reales():
+    """Carga datos reales si existen archivos CSV"""
+    archivos = ["filtraciones_2026.csv", "leak_2026.csv", "data_2026.csv", "breach.csv"]
+    for archivo in archivos:
+        if os.path.exists(archivo):
+            importar_csv(archivo)
+            return
+    # Si no hay archivos, usar datos de muestra
+    poblar_datos_muestra()
+
+def importar_csv(archivo):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     count = 0
-    for item in datos_reales:
+    try:
+        with open(archivo, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 3:
+                    dominio = row[0].strip()
+                    usuario = row[1].strip()
+                    contraseña = row[2].strip()
+                    fecha = row[3].strip() if len(row) > 3 else "2026"
+                    hash_registro = f"{dominio}{usuario}{contraseña}"
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (dominio, usuario, contraseña, fecha, hash_registro))
+                    count += 1
+        conn.commit()
+        print(f"✅ Importados {count} registros desde {archivo}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    finally:
+        conn.close()
+
+def poblar_datos_muestra():
+    datos = [
+        {"dominio": "mobbex.com", "usuario": "admin@mobbex.com", "contraseña": "M0bb3x2026!", "fecha": "2026-01-15"},
+        {"dominio": "mobbex.com", "usuario": "dev@mobbex.com", "contraseña": "Dev2026!", "fecha": "2026-01-15"},
+        {"dominio": "gmail.com", "usuario": "juanperez@gmail.com", "contraseña": "Juan2026!", "fecha": "2026-02-10"},
+        {"dominio": "gmail.com", "usuario": "mariagonzalez@gmail.com", "contraseña": "Maria2026!", "fecha": "2026-02-10"},
+        {"dominio": "netflix.com", "usuario": "user1@netflix.com", "contraseña": "Netflix2026!", "fecha": "2026-03-05"},
+        {"dominio": "paypal.com", "usuario": "user1@paypal.com", "contraseña": "Paypal2026!", "fecha": "2026-04-01"},
+    ]
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    for item in datos:
         hash_registro = f"{item['dominio']}{item['usuario']}{item['contraseña']}"
-        try:
-            cursor.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)', 
-                          (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
-            count += 1
-        except: pass
+        cursor.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)', 
+                      (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
     conn.commit()
     conn.close()
-    print(f"✅ Base de datos poblada con {count} registros")
+    print("📊 Datos de muestra cargados")
 
 def buscar_credenciales(dominio=None, usuario=None, limite=200):
     conn = sqlite3.connect(DB_NAME)
@@ -198,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v17.0*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v18.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
@@ -213,7 +255,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v17.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v18.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -472,7 +514,7 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES ====================
+# ==================== MANEJADOR DE BOTONES (FUNCIONAL) ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -481,7 +523,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES*\n\n"
+            "🔍 *FILTRACIONES - 2026*\n\n"
             "/buscar <dominio> - Buscar credenciales\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
@@ -520,7 +562,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "17.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "18.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -558,7 +600,7 @@ async def setup_webhook():
     await application.initialize()
     webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
     await application.bot.set_webhook(url=webhook_url)
-    logging.info(f"✅ Webhook configurado: {webhook_url}")
+    print(f"✅ Webhook configurado: {webhook_url}")
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
