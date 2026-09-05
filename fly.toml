@@ -1,22 +1,19 @@
-# fly.toml app configuration file generated for ninjabase-bot on 2026-09-04T22:03:20Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'ninjabase-bot'
-primary_region = 'gru'
+app = "ninjabase-bot"
+primary_region = "gru"
 
 [build]
+  [build.args]
+    PYTHON_VERSION = "3.11"
 
 [env]
-  PORT = '8080'
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'off'
+  auto_stop_machines = false
   min_machines_running = 1
 
 [[vm]]
-  size = 'shared-cpu-1x'
-  memory = '256mb'
+  size = "shared-cpu-1x"
+  memory = "256mb"
