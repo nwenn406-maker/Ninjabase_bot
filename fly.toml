@@ -2,18 +2,11 @@ app = "ninjabase-bot"
 primary_region = "gru"
 
 [build]
-  [build.args]
-    PYTHON_VERSION = "3.12"
-
-[env]
-  PORT = "8080"
-
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = false
-  min_machines_running = 1
+  image = "flyio/python:3.12"
 
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
+
+[processes]
+  app = "python app.py"
