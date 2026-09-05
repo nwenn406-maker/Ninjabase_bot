@@ -8,6 +8,7 @@ import csv
 import random
 import requests
 import socket
+import time
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -53,13 +54,11 @@ def init_db():
     cargar_datos_reales()
 
 def cargar_datos_reales():
-    """Carga datos reales si existen archivos CSV"""
     archivos = ["filtraciones_2026.csv", "leak_2026.csv", "data_2026.csv", "breach.csv"]
     for archivo in archivos:
         if os.path.exists(archivo):
             importar_csv(archivo)
             return
-    # Si no hay archivos, usar datos de muestra
     poblar_datos_muestra()
 
 def importar_csv(archivo):
@@ -82,7 +81,7 @@ def importar_csv(archivo):
                     ''', (dominio, usuario, contraseña, fecha, hash_registro))
                     count += 1
         conn.commit()
-        print(f"✅ Importados {count} registros desde {archivo}")
+        print(f"✅ Importados {count} registros")
     except Exception as e:
         print(f"❌ Error: {e}")
     finally:
@@ -240,7 +239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v18.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v19.0 - TIEMPO REAL*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
@@ -255,7 +254,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v18.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v19.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -514,7 +513,7 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES (FUNCIONAL) ====================
+# ==================== MANEJADOR DE BOTONES ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -562,7 +561,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "18.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "19.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
