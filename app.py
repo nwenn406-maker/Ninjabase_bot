@@ -8,8 +8,9 @@ import csv
 import random
 import requests
 import socket
+import threading
 import time
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import asyncio
@@ -54,7 +55,6 @@ def init_db():
     poblar_base_datos_2026()
 
 def poblar_base_datos_2026():
-    """Genera más de 100 credenciales por dominio para 2026"""
     datos = []
     dominios = [
         "mobbex.com", "rebill.com", "monei.com", "gmail.com", "hotmail.com",
@@ -64,16 +64,14 @@ def poblar_base_datos_2026():
         "whatsapp.com", "telegram.com", "discord.com", "github.com",
         "reddit.com", "tiktok.com", "youtube.com"
     ]
-    
     for dominio in dominios:
-        for i in range(1, 101):  # 100 credenciales por dominio
+        for i in range(1, 101):
             datos.append({
                 "dominio": dominio,
                 "usuario": f"user{i}@{dominio}",
                 "contraseña": f"{dominio.split('.')[0]}{i}2026!",
                 "fecha": f"2026-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
             })
-    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     count = 0
@@ -221,7 +219,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v20.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v22.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 13\n\n"
@@ -236,7 +234,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v20.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v22.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -495,7 +493,7 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES (CORREGIDO) ====================
+# ==================== MANEJADOR DE BOTONES ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -538,55 +536,49 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# ==================== WEBHOOK ====================
+# ==================== FLASK (SOLO PARA MANTENER EL SERVICIO VIVO) ====================
 
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "20.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "22.0", "registros": total})
 
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    try:
-        data = request.get_json()
-        if not data:
-            return "No data", 400
-        update = Update.de_json(data, application.bot)
-        asyncio.run(application.process_update(update))
-        return "OK", 200
-    except Exception as e:
-        return "Error", 500
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 # ==================== CONFIGURACIÓN ====================
 
-init_db()
-
-application = Application.builder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("saldo", saldo_command))
-application.add_handler(CommandHandler("stats", stats_command))
-application.add_handler(CommandHandler("buscar", buscar_command))
-application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
-application.add_handler(CommandHandler("vuln", vuln_command))
-application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
-application.add_handler(CommandHandler("scan", scan_command))
-application.add_handler(CommandHandler("subdomain", subdomain_command))
-application.add_handler(CommandHandler("ip", ip_command))
-application.add_handler(CommandHandler("email", email_command))
-application.add_handler(CommandHandler("deuda", deuda_command))
-application.add_handler(CallbackQueryHandler(button_handler))
-
-async def setup_webhook():
-    await application.initialize()
-    webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
-    await application.bot.set_webhook(url=webhook_url)
-    print(f"✅ Webhook configurado: {webhook_url}")
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-loop.run_until_complete(setup_webhook())
-
-if __name__ == '__main__':
+def main():
+    init_db()
+    
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("saldo", saldo_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("buscar", buscar_command))
+    application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
+    application.add_handler(CommandHandler("vuln", vuln_command))
+    application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
+    application.add_handler(CommandHandler("scan", scan_command))
+    application.add_handler(CommandHandler("subdomain", subdomain_command))
+    application.add_handler(CommandHandler("ip", ip_command))
+    application.add_handler(CommandHandler("email", email_command))
+    application.add_handler(CommandHandler("deuda", deuda_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    # Iniciar polling en un hilo separado
+    def run_polling():
+        print("🤖 Bot iniciado en modo POLLING (v22.0)")
+        application.run_polling()
+    
+    polling_thread = threading.Thread(target=run_polling, daemon=True)
+    polling_thread.start()
+    
+    # Mantener Flask vivo para Render
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
+
+if __name__ == '__main__':
+    main()
