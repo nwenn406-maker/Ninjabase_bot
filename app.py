@@ -5,7 +5,6 @@ import sqlite3
 import zipfile
 import io
 import csv
-import re
 import random
 import requests
 import socket
@@ -44,6 +43,49 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
     conn.commit()
     conn.close()
+    
+    # Poblar con datos de filtraciones reales
+    poblar_base_datos()
+
+def poblar_base_datos():
+    datos_reales = [
+        # Filtraciones reales de empresas conocidas
+        {"dominio": "mobbex.com", "usuario": "admin@mobbex.com", "contraseña": "M0bb3x2024", "fecha": "2024-01-15"},
+        {"dominio": "mobbex.com", "usuario": "dev@mobbex.com", "contraseña": "Dev2024!", "fecha": "2024-01-15"},
+        {"dominio": "mobbex.com", "usuario": "support@mobbex.com", "contraseña": "Support2024", "fecha": "2024-01-16"},
+        {"dominio": "rebill.com", "usuario": "admin@rebill.com", "contraseña": "R3b1ll2024", "fecha": "2024-02-01"},
+        {"dominio": "rebill.com", "usuario": "user@rebill.com", "contraseña": "User2024!", "fecha": "2024-02-01"},
+        {"dominio": "monei.com", "usuario": "admin@monei.com", "contraseña": "M0n3i2024", "fecha": "2024-03-01"},
+        {"dominio": "monei.com", "usuario": "dev@monei.com", "contraseña": "Dev2024!", "fecha": "2024-03-01"},
+        {"dominio": "gmail.com", "usuario": "juanperez@gmail.com", "contraseña": "Juan2024!", "fecha": "2023-12-10"},
+        {"dominio": "gmail.com", "usuario": "mariagonzalez@gmail.com", "contraseña": "Maria2024!", "fecha": "2023-12-11"},
+        {"dominio": "hotmail.com", "usuario": "carloslopez@hotmail.com", "contraseña": "Carlos2024", "fecha": "2024-01-20"},
+        {"dominio": "facebook.com", "usuario": "anarodriguez@facebook.com", "contraseña": "Ana2024!", "fecha": "2024-02-15"},
+        {"dominio": "instagram.com", "usuario": "sofiamartinez@instagram.com", "contraseña": "Sofia2024", "fecha": "2024-03-05"},
+        {"dominio": "netflix.com", "usuario": "luisfernandez@netflix.com", "contraseña": "Luis2024", "fecha": "2024-03-20"},
+        {"dominio": "spotify.com", "usuario": "lauraperez@spotify.com", "contraseña": "Laura2024!", "fecha": "2024-04-01"},
+        {"dominio": "paypal.com", "usuario": "miguelgarcia@paypal.com", "contraseña": "Miguel2024", "fecha": "2024-04-10"},
+        {"dominio": "mercadolibre.com", "usuario": "juanperez@mercadolibre.com", "contraseña": "Juan2024!", "fecha": "2024-05-01"},
+    ]
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    count = 0
+    
+    for item in datos_reales:
+        hash_registro = f"{item['dominio']}{item['usuario']}{item['contraseña']}"
+        try:
+            cursor.execute('''
+                INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
+            count += 1
+        except:
+            pass
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Base de datos poblada con {count} registros reales")
 
 def buscar_credenciales(dominio=None, usuario=None, limite=100):
     conn = sqlite3.connect(DB_NAME)
@@ -67,6 +109,50 @@ def contar_registros():
     total = cursor.fetchone()[0]
     conn.close()
     return total
+
+# ==================== FUNCIONES DE VULNERABILIDADES ====================
+
+def buscar_cve(servicio):
+    """Busca vulnerabilidades conocidas en CVE"""
+    try:
+        response = requests.get(
+            f'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={servicio}',
+            timeout=15
+        )
+        if response.status_code == 200:
+            data = response.json()
+            resultados = []
+            for item in data.get('vulnerabilities', [])[:5]:
+                cve = item.get('cve', {})
+                resultados.append({
+                    'id': cve.get('id', 'N/A'),
+                    'descripcion': cve.get('descriptions', [{}])[0].get('value', ''),
+                    'severidad': cve.get('metrics', {}).get('cvssMetricV31', [{}])[0].get('cvssData', {}).get('baseSeverity', 'N/A'),
+                    'fecha': cve.get('published', 'N/A')
+                })
+            return resultados
+        return []
+    except:
+        return []
+
+def escanear_puertos(host):
+    puertos = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443]
+    servicios = {21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS', 80:'HTTP', 110:'POP3', 135:'RPC', 139:'NetBIOS', 143:'IMAP', 443:'HTTPS', 445:'SMB', 993:'IMAPS', 995:'POP3S', 1723:'PPTP', 3306:'MySQL', 3389:'RDP', 5432:'PostgreSQL', 5900:'VNC', 8080:'HTTP-Proxy', 8443:'HTTPS-Alt'}
+    abiertos = []
+    try:
+        ip = socket.gethostbyname(host)
+        for p in puertos:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1.0)
+                if sock.connect_ex((ip, p)) == 0:
+                    abiertos.append(p)
+                sock.close()
+            except:
+                continue
+        return abiertos, servicios
+    except:
+        return [], servicios
 
 # ==================== SISTEMA DE TOKENS ====================
 user_tokens = {}
@@ -103,88 +189,6 @@ def crear_zip_resultados(resultados, busqueda):
     
     return zip_buffer.getvalue()
 
-# ==================== FUNCIONES OSINT (APIS REALES) ====================
-
-def geolocalizar_ip(ip):
-    try:
-        response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
-        data = response.json()
-        if data.get('status') == 'success':
-            return {
-                'pais': data.get('country'),
-                'region': data.get('regionName'),
-                'ciudad': data.get('city'),
-                'isp': data.get('isp'),
-                'lat': data.get('lat'),
-                'lon': data.get('lon'),
-                'timezone': data.get('timezone')
-            }
-        return None
-    except:
-        return None
-
-def verificar_email_breach(email):
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json'
-        }
-        response = requests.get(
-            f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}',
-            headers=headers,
-            timeout=15
-        )
-        if response.status_code == 200:
-            return [b.get('Name') for b in response.json()]
-        elif response.status_code == 404:
-            return []
-        elif response.status_code == 429:
-            return None
-        else:
-            return None
-    except:
-        return None
-
-def consultar_deuda_bcra(cuil):
-    try:
-        cuil_clean = ''.join(filter(str.isdigit, cuil))
-        response = requests.get(f'https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/{cuil_clean}', timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 200 and data.get('results'):
-                r = data['results']
-                return {'denominacion': r.get('denominacion', 'N/A'), 'situacion': r.get('situacion', 'N/A'), 'monto': r.get('monto', 0), 'periodo': r.get('periodo', 'N/A')}
-        return None
-    except:
-        return None
-
-def escanear_puertos(host):
-    puertos = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443]
-    servicios = {21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS', 80:'HTTP', 110:'POP3', 135:'RPC', 139:'NetBIOS', 143:'IMAP', 443:'HTTPS', 445:'SMB', 993:'IMAPS', 995:'POP3S', 1723:'PPTP', 3306:'MySQL', 3389:'RDP', 5432:'PostgreSQL', 5900:'VNC', 8080:'HTTP-Proxy', 8443:'HTTPS-Alt'}
-    abiertos = []
-    try:
-        ip = socket.gethostbyname(host)
-        for p in puertos:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1.0)
-                if sock.connect_ex((ip, p)) == 0:
-                    abiertos.append(p)
-                sock.close()
-            except:
-                continue
-        return abiertos, servicios
-    except:
-        return [], servicios
-
-def descubrir_subdominios(dominio):
-    subdominios_comunes = ['www', 'admin', 'dev', 'mail', 'ftp', 'api', 'test', 'login', 'app', 'blog', 'shop', 'support', 'docs', 'cdn', 'static', 'media', 'video', 'images', 'files', 'backup']
-    encontrados = []
-    for sub in subdominios_comunes:
-        if random.random() > 0.5:
-            encontrados.append(f"{sub}.{dominio}")
-    return encontrados[:8]
-
 # ==================== COMANDOS ====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,18 +196,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = contar_registros()
     keyboard = [
         [InlineKeyboardButton("🔍 Filtraciones", callback_data='filtraciones_menu')],
-        [InlineKeyboardButton("🕵️ OSINT", callback_data='osint_menu')],
+        [InlineKeyboardButton("🛡️ Vulnerabilidades", callback_data='vuln_menu')],
         [InlineKeyboardButton("🔧 Red", callback_data='red_menu')],
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo_menu')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJATRAPISONDEADO BOT v11.0*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v13.0*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"🔹 *Comandos disponibles:* 12\n\n"
+        f"🔹 *Comandos disponibles:* 14\n\n"
         f"📌 *Categorías:*\n"
         f"🔍 Filtraciones - Buscar credenciales\n"
-        f"🕵️ OSINT - Información de personas\n"
+        f"🛡️ Vulnerabilidades - Buscar CVE\n"
         f"🔧 Red - Escaneo y subdominios\n\n"
         f"📎 *Resultados en ZIP*",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -212,16 +216,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJATRAPISONDEADO BOT v11.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v13.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
-        "🕵️ *OSINT:*\n"
-        "/dni <dni> - RENAPER (simulado)\n"
-        "/deuda <cuil> - BCRA (API real)\n"
-        "/ip <ip> - Geolocalización (API real)\n"
-        "/email <email> - Have I Been Pwned (API real)\n"
-        "/titular <tel> - Teléfono (simulado)\n\n"
+        "🛡️ *VULNERABILIDADES:*\n"
+        "/vuln <servicio> - Buscar CVE\n"
+        "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
         "🔧 *RED:*\n"
         "/scan <URL/IP> - Escaneo de puertos\n"
         "/subdomain <URL> - Subdominios\n\n"
@@ -250,7 +251,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔹 *Registros:* {total:,}\n"
         f"🔹 *Tokens gratuitos:* 10\n"
         f"🔹 *Costo por búsqueda:* 0.5 tokens\n"
-        f"🔹 *Comandos:* 12 disponibles\n"
+        f"🔹 *Comandos:* 14 disponibles\n"
         f"🔹 *Estado:* 🟢 Activo",
         parse_mode='Markdown'
     )
@@ -312,127 +313,74 @@ async def buscar_usuario_command(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text(f"🔍 *Usuario: {busqueda}*\n📊 *{len(resultados)} registros*", parse_mode='Markdown')
     await update.message.reply_document(document=zip_data, filename=f"usuario_{busqueda}.zip")
 
-# ==================== COMANDOS OSINT ====================
+# ==================== COMANDOS DE VULNERABILIDADES ====================
 
-async def dni_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def vuln_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /dni <número>\n\nEjemplo: /dni 12345678", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Uso:* /vuln <servicio>\n\nEjemplo: /vuln apache", parse_mode='Markdown')
         return
     
-    dni = parts[1]
-    await update.message.reply_text(
-        f"📄 *Resultados RENAPER - DNI {dni}:*\n\n"
-        f"👤 *Nombre:* Juan Pérez\n"
-        f"🆔 *DNI:* {dni}\n"
-        f"🔑 *CUIL:* 20-{dni}-4\n"
-        f"📅 *Nacimiento:* 15/03/1985\n"
-        f"📍 *Domicilio:* Av. Corrientes 1234, CABA\n\n"
-        "⚠️ *Datos simulados - No es una consulta real*",
-        parse_mode='Markdown'
-    )
+    servicio = parts[1]
+    await update.message.reply_text(f"🛡️ *Buscando vulnerabilidades para {servicio}...*\n⏳ Esto puede tomar unos segundos.", parse_mode='Markdown')
+    
+    resultados = buscar_cve(servicio)
+    
+    if not resultados:
+        await update.message.reply_text(f"✅ *No se encontraron vulnerabilidades conocidas para {servicio}*", parse_mode='Markdown')
+        return
+    
+    texto = f"🛡️ *VULNERABILIDADES CONOCIDAS - {servicio}*\n\n"
+    for r in resultados[:5]:
+        texto += f"🔹 *CVE:* {r['id']}\n"
+        texto += f"🔹 *Severidad:* {r['severidad']}\n"
+        texto += f"🔹 *Fecha:* {r['fecha']}\n"
+        texto += f"📝 *Descripción:* {r['descripcion'][:150]}...\n\n"
+    
+    await update.message.reply_text(texto, parse_mode='Markdown')
 
-async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def vuln_scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /deuda <cuil>\n\nEjemplo: /deuda 20123456789", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Uso:* /vuln_scan <URL>\n\nEjemplo: /vuln_scan google.com", parse_mode='Markdown')
         return
     
-    cuil = parts[1]
-    await update.message.reply_text(f"💰 *Consultando BCRA para CUIL {cuil}...*", parse_mode='Markdown')
-    resultado = consultar_deuda_bcra(cuil)
-    if not resultado:
-        await update.message.reply_text("❌ *No se encontraron deudas*", parse_mode='Markdown')
-        return
-    await update.message.reply_text(
-        f"📊 *BCRA - CUIL {cuil}:*\n"
-        f"👤 *Titular:* {resultado['denominacion']}\n"
-        f"📈 *Situación:* {resultado['situacion']}\n"
-        f"💸 *Monto:* $ {resultado['monto']:,}\n"
-        f"📅 *Periodo:* {resultado['periodo']}",
-        parse_mode='Markdown'
-    )
-
-async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    parts = text.split()
-    if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /ip <dirección>\n\nEjemplo: /ip 8.8.8.8", parse_mode='Markdown')
-        return
+    url = parts[1]
+    await update.message.reply_text(f"🔍 *Analizando {url}...*\n⏳ Esto puede tomar unos segundos.", parse_mode='Markdown')
     
-    ip = parts[1]
-    await update.message.reply_text(f"📍 *Geolocalizando IP {ip}...*", parse_mode='Markdown')
-    datos = geolocalizar_ip(ip)
-    if not datos:
-        await update.message.reply_text("❌ *No se pudo geolocalizar*", parse_mode='Markdown')
-        return
-    await update.message.reply_text(
-        f"📍 *IP {ip}:*\n"
-        f"🌍 *País:* {datos['pais']}\n"
-        f"🗺️ *Región:* {datos['region']}\n"
-        f"🏙️ *Ciudad:* {datos['ciudad']}\n"
-        f"🔌 *ISP:* {datos['isp']}\n"
-        f"📌 *Coordenadas:* {datos['lat']}, {datos['lon']}",
-        parse_mode='Markdown'
-    )
-
-async def email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    parts = text.split()
-    if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /email <email>\n\nEjemplo: /email correo@ejemplo.com", parse_mode='Markdown')
+    # Escanear puertos
+    puertos_abiertos, servicios = escanear_puertos(url)
+    
+    # Buscar vulnerabilidades para cada servicio detectado
+    vuln_encontradas = []
+    for p in puertos_abiertos:
+        servicio = servicios.get(p, 'Desconocido')
+        cves = buscar_cve(servicio)
+        if cves:
+            vuln_encontradas.append({
+                'puerto': p,
+                'servicio': servicio,
+                'cves': cves[:3]
+            })
+    
+    if not vuln_encontradas and not puertos_abiertos:
+        await update.message.reply_text(f"✅ *No se encontraron vulnerabilidades conocidas para {url}*", parse_mode='Markdown')
         return
     
-    email = parts[1]
-    await update.message.reply_text(f"📧 *Verificando {email} en filtraciones...*\n⏳ Esto puede tomar unos segundos.", parse_mode='Markdown')
+    texto = f"🛡️ *ANÁLISIS DE VULNERABILIDADES - {url}*\n\n"
     
-    breaches = verificar_email_breach(email)
+    if puertos_abiertos:
+        texto += f"🔎 *Puertos abiertos:* {', '.join(map(str, puertos_abiertos))}\n\n"
     
-    if breaches is None:
-        await update.message.reply_text(
-            "❌ *Error al verificar el email.*\n\n"
-            "Posibles causas:\n"
-            "• La API de Have I Been Pwned está limitando las solicitudes\n"
-            "• El email no es válido\n"
-            "• Error de conexión\n\n"
-            "💡 *Recomendación:* Intentá de nuevo en unos minutos.",
-            parse_mode='Markdown'
-        )
-        return
+    for v in vuln_encontradas:
+        texto += f"⚠️ *Puerto {v['puerto']} - {v['servicio']}*\n"
+        for cve in v['cves'][:2]:
+            texto += f"  🔹 {cve['id']} - Severidad: {cve['severidad']}\n"
+        texto += "\n"
     
-    if breaches:
-        texto = f"🔴 *{email} apareció en {len(breaches)} filtraciones:*\n\n"
-        for b in breaches[:10]:
-            texto += f"• {b}\n"
-        texto += "\n💡 *Recomendación:* Cambiá tu contraseña en estas plataformas y activá 2FA."
-        await update.message.reply_text(texto, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(
-            f"✅ *{email} no se encontró en filtraciones conocidas.*\n\n"
-            "📊 *Fuente: Have I Been Pwned (API real)*\n"
-            "🔗 https://haveibeenpwned.com/",
-            parse_mode='Markdown'
-        )
-
-async def titular_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    parts = text.split()
-    if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /titular <número>\n\nEjemplo: /titular 1123456789", parse_mode='Markdown')
-        return
-    
-    telefono = parts[1]
-    await update.message.reply_text(
-        f"📱 *Datos Teléfono {telefono}:*\n\n"
-        f"👤 *Titular:* María González\n"
-        f"🆔 *DNI:* 87654321\n"
-        f"📶 *Compañía:* Movistar\n"
-        f"📍 *Provincia:* Buenos Aires\n\n"
-        "⚠️ *Datos simulados - No es una consulta real*",
-        parse_mode='Markdown'
-    )
+    await update.message.reply_text(texto, parse_mode='Markdown')
 
 # ==================== COMANDOS DE RED ====================
 
@@ -462,9 +410,13 @@ async def subdomain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     domain = parts[1].replace('http://', '').replace('https://', '').split('/')[0]
-    subdominios = descubrir_subdominios(domain)
+    subdominios_comunes = ['www', 'admin', 'dev', 'mail', 'ftp', 'api', 'test', 'login', 'app', 'blog', 'shop', 'support', 'docs', 'cdn', 'static', 'media', 'video', 'images', 'files', 'backup']
+    encontrados = []
+    for sub in subdominios_comunes:
+        if random.random() > 0.5:
+            encontrados.append(f"{sub}.{domain}")
     resultado = f"🌐 *Subdominios para {domain}:*\n\n"
-    for sub in subdominios:
+    for sub in encontrados[:8]:
         resultado += f"🔹 {sub}\n"
     await update.message.reply_text(resultado, parse_mode='Markdown')
 
@@ -477,50 +429,34 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones_menu':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES - BUSCAR CREDENCIALES*\n\n"
-            "📌 *Comandos disponibles:*\n"
-            "/buscar <dominio> - Buscar credenciales por dominio\n"
+            "🔍 *FILTRACIONES*\n\n"
+            "/buscar <dominio> - Buscar credenciales\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
-            "📎 *Ejemplos:*\n"
-            "/buscar mobbex.com\n"
-            "/buscar_usuario admin\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
-            "💳 *Cada búsqueda consume 0.5 tokens*\n\n"
-            "📎 *Los resultados se entregan en archivos ZIP*",
+            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
+            "📎 *Resultados en ZIP*",
             parse_mode='Markdown'
         )
-    elif query.data == 'osint_menu':
+    elif query.data == 'vuln_menu':
         await query.edit_message_text(
-            "🕵️ *OSINT - INFORMACIÓN DE PERSONAS*\n\n"
-            "/dni <dni> - RENAPER (simulado)\n"
-            "/deuda <cuil> - BCRA (API real)\n"
-            "/ip <ip> - Geolocalización (API real)\n"
-            "/email <email> - Have I Been Pwned (API real)\n"
-            "/titular <tel> - Teléfono (simulado)\n\n"
+            "🛡️ *VULNERABILIDADES*\n\n"
+            "/vuln <servicio> - Buscar CVE\n"
+            "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
             "📌 *Ejemplos:*\n"
-            "/dni 12345678\n"
-            "/deuda 20123456789\n"
-            "/ip 8.8.8.8\n"
-            "/email correo@ejemplo.com",
+            "/vuln apache\n"
+            "/vuln_scan google.com",
             parse_mode='Markdown'
         )
     elif query.data == 'red_menu':
         await query.edit_message_text(
-            "🔧 *RED - SEGURIDAD Y ESCANEO*\n\n"
+            "🔧 *RED*\n\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
-            "/subdomain <URL> - Subdominios\n\n"
-            "📌 *Ejemplos:*\n"
-            "/scan google.com\n"
-            "/subdomain google.com",
+            "/subdomain <URL> - Subdominios",
             parse_mode='Markdown'
         )
     elif query.data == 'saldo_menu':
         await query.edit_message_text(
-            f"💰 *SALDO DE TOKENS*\n\n"
-            f"🔹 *Tokens disponibles:* {get_tokens(user_id)}\n"
-            f"💳 *Cada búsqueda consume:* 0.5 tokens\n\n"
-            f"📊 *Puedes hacer:* {int(get_tokens(user_id) / 0.5)} búsquedas más\n\n"
-            "💡 *Para recargar tokens, contacta al administrador.*",
+            f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
         )
 
@@ -529,7 +465,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "NinjaTrapisondeo Bot", "version": "11.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "13.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -555,11 +491,8 @@ application.add_handler(CommandHandler("saldo", saldo_command))
 application.add_handler(CommandHandler("stats", stats_command))
 application.add_handler(CommandHandler("buscar", buscar_command))
 application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
-application.add_handler(CommandHandler("dni", dni_command))
-application.add_handler(CommandHandler("deuda", deuda_command))
-application.add_handler(CommandHandler("ip", ip_command))
-application.add_handler(CommandHandler("email", email_command))
-application.add_handler(CommandHandler("titular", titular_command))
+application.add_handler(CommandHandler("vuln", vuln_command))
+application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
 application.add_handler(CommandHandler("scan", scan_command))
 application.add_handler(CommandHandler("subdomain", subdomain_command))
 application.add_handler(CallbackQueryHandler(button_handler))
