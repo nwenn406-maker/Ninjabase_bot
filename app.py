@@ -166,7 +166,7 @@ def geolocalizar_ip(ip):
 def verificar_email_breach(email):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}', headers=headers, timeout=15)
+        response = requests.get(f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}', headers=headers, timeout=10)
         if response.status_code == 200:
             return [b.get('Name') for b in response.json()]
         elif response.status_code == 404:
@@ -198,7 +198,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v16.0*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v17.0*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
@@ -213,7 +213,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v16.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v17.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -433,18 +433,26 @@ async def email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     email = parts[1]
-    await update.message.reply_text(f"📧 *Verificando {email} en filtraciones...*", parse_mode='Markdown')
+    await update.message.reply_text(f"📧 *Verificando {email} en filtraciones...*\n⏳ Esto puede tomar unos segundos.", parse_mode='Markdown')
+    
     breaches = verificar_email_breach(email)
     if breaches is None:
-        await update.message.reply_text("❌ *Error al verificar el email.*", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Error al verificar el email.*\n\nPosibles causas:\n• La API de Have I Been Pwned está limitando las solicitudes\n• El email no es válido\n• Error de conexión\n\n💡 *Recomendación:* Intentá de nuevo en unos minutos.", parse_mode='Markdown')
         return
+    
     if breaches:
         texto = f"🔴 *{email} apareció en {len(breaches)} filtraciones:*\n\n"
         for b in breaches[:10]:
             texto += f"• {b}\n"
+        texto += "\n💡 *Recomendación:* Cambiá tu contraseña en estas plataformas y activá 2FA."
         await update.message.reply_text(texto, parse_mode='Markdown')
     else:
-        await update.message.reply_text(f"✅ *{email} no se encontró en filtraciones.*", parse_mode='Markdown')
+        await update.message.reply_text(
+            f"✅ *{email} no se encontró en filtraciones conocidas.*\n\n"
+            "📊 *Fuente: Have I Been Pwned (API real)*\n"
+            "🔗 https://haveibeenpwned.com/",
+            parse_mode='Markdown'
+        )
 
 async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -473,50 +481,37 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES - COMANDOS DISPONIBLES*\n\n"
-            "📌 *Usa estos comandos:*\n"
+            "🔍 *FILTRACIONES*\n\n"
             "/buscar <dominio> - Buscar credenciales\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
-            "📎 *Ejemplos:*\n"
-            "/buscar mobbex.com\n"
-            "/buscar_usuario admin\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
-            "💳 *Cada búsqueda consume 0.5 tokens*\n\n"
-            "📎 *Los resultados se entregan en archivos ZIP*",
+            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
+            "📎 *Resultados en ZIP*",
             parse_mode='Markdown'
         )
     elif query.data == 'vulnerabilidades':
         await query.edit_message_text(
-            "🛡️ *VULNERABILIDADES - COMANDOS DISPONIBLES*\n\n"
-            "📌 *Usa estos comandos:*\n"
+            "🛡️ *VULNERABILIDADES*\n\n"
             "/vuln <servicio> - Buscar CVE\n"
             "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
-            "📎 *Ejemplos:*\n"
+            "📌 *Ejemplos:*\n"
             "/vuln apache\n"
             "/vuln_scan google.com",
             parse_mode='Markdown'
         )
     elif query.data == 'red':
         await query.edit_message_text(
-            "🔧 *RED Y OSINT - COMANDOS DISPONIBLES*\n\n"
-            "📌 *Usa estos comandos:*\n"
+            "🔧 *RED Y OSINT*\n\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
             "/subdomain <URL> - Subdominios\n"
             "/ip <IP> - Geolocalización\n"
             "/email <email> - Have I Been Pwned\n"
-            "/deuda <cuil> - BCRA\n\n"
-            "📎 *Ejemplos:*\n"
-            "/scan google.com\n"
-            "/ip 8.8.8.8",
+            "/deuda <cuil> - BCRA",
             parse_mode='Markdown'
         )
     elif query.data == 'saldo':
         await query.edit_message_text(
-            f"💰 *SALDO DE TOKENS*\n\n"
-            f"🔹 *Tokens disponibles:* {get_tokens(user_id)}\n"
-            f"💳 *Cada búsqueda consume:* 0.5 tokens\n\n"
-            f"📊 *Puedes hacer:* {int(get_tokens(user_id) / 0.5)} búsquedas más\n\n"
-            "💡 *Para recargar tokens, contacta al administrador.*",
+            f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
         )
 
@@ -525,7 +520,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "16.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "17.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
