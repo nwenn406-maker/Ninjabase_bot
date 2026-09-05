@@ -125,12 +125,23 @@ def geolocalizar_ip(ip):
 
 def verificar_email_breach(email):
     try:
-        response = requests.get(f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}', timeout=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json'
+        }
+        response = requests.get(
+            f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}',
+            headers=headers,
+            timeout=15
+        )
         if response.status_code == 200:
             return [b.get('Name') for b in response.json()]
         elif response.status_code == 404:
             return []
-        return None
+        elif response.status_code == 429:
+            return None
+        else:
+            return None
     except:
         return None
 
@@ -189,13 +200,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🕵️ *NINJATRAPISONDEADO BOT v11.0*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"🔹 *Comandos disponibles:* 17\n\n"
+        f"🔹 *Comandos disponibles:* 12\n\n"
         f"📌 *Categorías:*\n"
         f"🔍 Filtraciones - Buscar credenciales\n"
         f"🕵️ OSINT - Información de personas\n"
         f"🔧 Red - Escaneo y subdominios\n\n"
         f"📎 *Resultados en ZIP*",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🕵️ *AYUDA - NINJATRAPISONDEADO BOT v11.0*\n\n"
+        "🔍 *FILTRACIONES:*\n"
+        "/buscar <dominio> - Buscar credenciales\n"
+        "/buscar_usuario <usuario> - Buscar por usuario\n\n"
+        "🕵️ *OSINT:*\n"
+        "/dni <dni> - RENAPER (simulado)\n"
+        "/deuda <cuil> - BCRA (API real)\n"
+        "/ip <ip> - Geolocalización (API real)\n"
+        "/email <email> - Have I Been Pwned (API real)\n"
+        "/titular <tel> - Teléfono (simulado)\n\n"
+        "🔧 *RED:*\n"
+        "/scan <URL/IP> - Escaneo de puertos\n"
+        "/subdomain <URL> - Subdominios\n\n"
+        "📌 *GENERALES:*\n"
+        "/start - Menú principal\n"
+        "/saldo - Ver tokens\n"
+        "/stats - Estado del bot\n"
+        "/help - Esta ayuda",
+        parse_mode='Markdown'
+    )
+
+async def saldo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        f"💰 *SALDO DE TOKENS*\n\n"
+        f"🔹 *Tokens disponibles:* {get_tokens(user_id)}\n"
+        f"💳 *Cada búsqueda consume:* 0.5 tokens\n\n"
+        f"📊 *Puedes hacer:* {int(get_tokens(user_id) / 0.5)} búsquedas más",
+        parse_mode='Markdown'
+    )
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    total = contar_registros()
+    await update.message.reply_text(
+        f"📊 *ESTADO DEL BOT*\n\n"
+        f"🔹 *Registros:* {total:,}\n"
+        f"🔹 *Tokens gratuitos:* 10\n"
+        f"🔹 *Costo por búsqueda:* 0.5 tokens\n"
+        f"🔹 *Comandos:* 12 disponibles\n"
+        f"🔹 *Estado:* 🟢 Activo",
         parse_mode='Markdown'
     )
 
@@ -259,7 +315,6 @@ async def buscar_usuario_command(update: Update, context: ContextTypes.DEFAULT_T
 # ==================== COMANDOS OSINT ====================
 
 async def dni_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Simulación de RENAPER (no hay API pública)"""
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
@@ -327,25 +382,41 @@ async def email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /email <email>", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Uso:* /email <email>\n\nEjemplo: /email correo@ejemplo.com", parse_mode='Markdown')
         return
     
     email = parts[1]
-    await update.message.reply_text(f"📧 *Verificando {email}...*", parse_mode='Markdown')
+    await update.message.reply_text(f"📧 *Verificando {email} en filtraciones...*\n⏳ Esto puede tomar unos segundos.", parse_mode='Markdown')
+    
     breaches = verificar_email_breach(email)
+    
     if breaches is None:
-        await update.message.reply_text("❌ *Error al verificar*", parse_mode='Markdown')
+        await update.message.reply_text(
+            "❌ *Error al verificar el email.*\n\n"
+            "Posibles causas:\n"
+            "• La API de Have I Been Pwned está limitando las solicitudes\n"
+            "• El email no es válido\n"
+            "• Error de conexión\n\n"
+            "💡 *Recomendación:* Intentá de nuevo en unos minutos.",
+            parse_mode='Markdown'
+        )
         return
+    
     if breaches:
         texto = f"🔴 *{email} apareció en {len(breaches)} filtraciones:*\n\n"
         for b in breaches[:10]:
             texto += f"• {b}\n"
+        texto += "\n💡 *Recomendación:* Cambiá tu contraseña en estas plataformas y activá 2FA."
         await update.message.reply_text(texto, parse_mode='Markdown')
     else:
-        await update.message.reply_text(f"✅ *{email} no se encontró en filtraciones*", parse_mode='Markdown')
+        await update.message.reply_text(
+            f"✅ *{email} no se encontró en filtraciones conocidas.*\n\n"
+            "📊 *Fuente: Have I Been Pwned (API real)*\n"
+            "🔗 https://haveibeenpwned.com/",
+            parse_mode='Markdown'
+        )
 
 async def titular_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Simulación de titular de teléfono (no hay API pública)"""
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
@@ -369,7 +440,7 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /scan <URL/IP>", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Uso:* /scan <URL/IP>\n\nEjemplo: /scan google.com", parse_mode='Markdown')
         return
     
     target = parts[1]
@@ -387,7 +458,7 @@ async def subdomain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     parts = text.split()
     if len(parts) < 2:
-        await update.message.reply_text("❌ *Uso:* /subdomain <URL>", parse_mode='Markdown')
+        await update.message.reply_text("❌ *Uso:* /subdomain <URL>\n\nEjemplo: /subdomain google.com", parse_mode='Markdown')
         return
     
     domain = parts[1].replace('http://', '').replace('https://', '').split('/')[0]
@@ -396,47 +467,6 @@ async def subdomain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for sub in subdominios:
         resultado += f"🔹 {sub}\n"
     await update.message.reply_text(resultado, parse_mode='Markdown')
-
-# ==================== COMANDOS GENERALES ====================
-
-async def saldo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    await update.message.reply_text(f"💰 *Saldo: {get_tokens(user_id)} tokens*", parse_mode='Markdown')
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    total = contar_registros()
-    await update.message.reply_text(
-        f"📊 *ESTADO DEL BOT*\n\n"
-        f"🔹 *Registros:* {total:,}\n"
-        f"🔹 *Tokens gratuitos:* 10\n"
-        f"🔹 *Costo por búsqueda:* 0.5 tokens\n"
-        f"🔹 *Comandos:* 12 disponibles\n"
-        f"🔹 *Estado:* 🟢 Activo",
-        parse_mode='Markdown'
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🕵️ *AYUDA - NINJATRAPISONDEADO BOT v11.0*\n\n"
-        "🔍 *FILTRACIONES:*\n"
-        "/buscar <dominio> - Buscar credenciales\n"
-        "/buscar_usuario <usuario> - Buscar por usuario\n\n"
-        "🕵️ *OSINT:*\n"
-        "/dni <dni> - RENAPER (simulado)\n"
-        "/deuda <cuil> - BCRA (API real)\n"
-        "/ip <ip> - Geolocalización (API real)\n"
-        "/email <email> - Have I Been Pwned (API real)\n"
-        "/titular <tel> - Teléfono (simulado)\n\n"
-        "🔧 *RED:*\n"
-        "/scan <URL/IP> - Escaneo de puertos\n"
-        "/subdomain <URL> - Subdominios\n\n"
-        "📌 *GENERALES:*\n"
-        "/start - Menú principal\n"
-        "/saldo - Ver tokens\n"
-        "/stats - Estado del bot\n"
-        "/help - Esta ayuda",
-        parse_mode='Markdown'
-    )
 
 # ==================== MANEJADOR DE BOTONES ====================
 
@@ -447,33 +477,52 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones_menu':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES*\n\n"
-            "/buscar <dominio> - Buscar credenciales\n"
+            "🔍 *FILTRACIONES - BUSCAR CREDENCIALES*\n\n"
+            "📌 *Comandos disponibles:*\n"
+            "/buscar <dominio> - Buscar credenciales por dominio\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
+            "📎 *Ejemplos:*\n"
+            "/buscar mobbex.com\n"
+            "/buscar_usuario admin\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
-            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
-            "📎 *Resultados en ZIP*",
+            "💳 *Cada búsqueda consume 0.5 tokens*\n\n"
+            "📎 *Los resultados se entregan en archivos ZIP*",
             parse_mode='Markdown'
         )
     elif query.data == 'osint_menu':
         await query.edit_message_text(
-            "🕵️ *OSINT*\n\n"
+            "🕵️ *OSINT - INFORMACIÓN DE PERSONAS*\n\n"
             "/dni <dni> - RENAPER (simulado)\n"
             "/deuda <cuil> - BCRA (API real)\n"
             "/ip <ip> - Geolocalización (API real)\n"
             "/email <email> - Have I Been Pwned (API real)\n"
-            "/titular <tel> - Teléfono (simulado)",
+            "/titular <tel> - Teléfono (simulado)\n\n"
+            "📌 *Ejemplos:*\n"
+            "/dni 12345678\n"
+            "/deuda 20123456789\n"
+            "/ip 8.8.8.8\n"
+            "/email correo@ejemplo.com",
             parse_mode='Markdown'
         )
     elif query.data == 'red_menu':
         await query.edit_message_text(
-            "🔧 *RED*\n\n"
+            "🔧 *RED - SEGURIDAD Y ESCANEO*\n\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
-            "/subdomain <URL> - Subdominios",
+            "/subdomain <URL> - Subdominios\n\n"
+            "📌 *Ejemplos:*\n"
+            "/scan google.com\n"
+            "/subdomain google.com",
             parse_mode='Markdown'
         )
     elif query.data == 'saldo_menu':
-        await query.edit_message_text(f"💰 *Saldo: {get_tokens(user_id)} tokens*", parse_mode='Markdown')
+        await query.edit_message_text(
+            f"💰 *SALDO DE TOKENS*\n\n"
+            f"🔹 *Tokens disponibles:* {get_tokens(user_id)}\n"
+            f"💳 *Cada búsqueda consume:* 0.5 tokens\n\n"
+            f"📊 *Puedes hacer:* {int(get_tokens(user_id) / 0.5)} búsquedas más\n\n"
+            "💡 *Para recargar tokens, contacta al administrador.*",
+            parse_mode='Markdown'
+        )
 
 # ==================== WEBHOOK ====================
 
@@ -502,6 +551,8 @@ init_db()
 application = Application.builder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("saldo", saldo_command))
+application.add_handler(CommandHandler("stats", stats_command))
 application.add_handler(CommandHandler("buscar", buscar_command))
 application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
 application.add_handler(CommandHandler("dni", dni_command))
@@ -511,8 +562,6 @@ application.add_handler(CommandHandler("email", email_command))
 application.add_handler(CommandHandler("titular", titular_command))
 application.add_handler(CommandHandler("scan", scan_command))
 application.add_handler(CommandHandler("subdomain", subdomain_command))
-application.add_handler(CommandHandler("saldo", saldo_command))
-application.add_handler(CommandHandler("stats", stats_command))
 application.add_handler(CallbackQueryHandler(button_handler))
 
 async def setup_webhook():
