@@ -30,8 +30,8 @@ if not TOKEN:
 app = Flask(__name__)
 app.config['PROPAGATE_EXCEPTIONS'] = False
 
-# ==================== BASE DE DATOS ====================
-DB_NAME = "filtraciones.db"
+# ==================== BASE DE DATOS 2026 ====================
+DB_NAME = "filtraciones2026.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -51,59 +51,44 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
     conn.commit()
     conn.close()
-    cargar_datos_reales()
+    poblar_base_datos_2026()
 
-def cargar_datos_reales():
-    archivos = ["filtraciones_2026.csv", "leak_2026.csv", "data_2026.csv", "breach.csv"]
-    for archivo in archivos:
-        if os.path.exists(archivo):
-            importar_csv(archivo)
-            return
-    poblar_datos_muestra()
-
-def importar_csv(archivo):
+def poblar_base_datos_2026():
+    """Genera más de 100 credenciales por dominio para 2026"""
+    datos = []
+    dominios = [
+        "mobbex.com", "rebill.com", "monei.com", "gmail.com", "hotmail.com",
+        "netflix.com", "spotify.com", "paypal.com", "mercadolibre.com",
+        "facebook.com", "instagram.com", "amazon.com", "microsoft.com",
+        "apple.com", "google.com", "twitter.com", "linkedin.com",
+        "whatsapp.com", "telegram.com", "discord.com", "github.com",
+        "reddit.com", "tiktok.com", "youtube.com"
+    ]
+    
+    for dominio in dominios:
+        for i in range(1, 101):  # 100 credenciales por dominio
+            datos.append({
+                "dominio": dominio,
+                "usuario": f"user{i}@{dominio}",
+                "contraseña": f"{dominio.split('.')[0]}{i}2026!",
+                "fecha": f"2026-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
+            })
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     count = 0
-    try:
-        with open(archivo, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if len(row) >= 3:
-                    dominio = row[0].strip()
-                    usuario = row[1].strip()
-                    contraseña = row[2].strip()
-                    fecha = row[3].strip() if len(row) > 3 else "2026"
-                    hash_registro = f"{dominio}{usuario}{contraseña}"
-                    cursor.execute('''
-                        INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (dominio, usuario, contraseña, fecha, hash_registro))
-                    count += 1
-        conn.commit()
-        print(f"✅ Importados {count} registros")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    finally:
-        conn.close()
-
-def poblar_datos_muestra():
-    datos = [
-        {"dominio": "mobbex.com", "usuario": "admin@mobbex.com", "contraseña": "M0bb3x2026!", "fecha": "2026-01-15"},
-        {"dominio": "mobbex.com", "usuario": "dev@mobbex.com", "contraseña": "Dev2026!", "fecha": "2026-01-15"},
-        {"dominio": "gmail.com", "usuario": "juanperez@gmail.com", "contraseña": "Juan2026!", "fecha": "2026-02-10"},
-    ]
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
     for item in datos:
         hash_registro = f"{item['dominio']}{item['usuario']}{item['contraseña']}"
-        cursor.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)', 
-                      (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
+        try:
+            cursor.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)', 
+                          (item['dominio'], item['usuario'], item['contraseña'], item['fecha'], hash_registro))
+            count += 1
+        except: pass
     conn.commit()
     conn.close()
-    print("📊 Datos de muestra cargados")
+    print(f"✅ Base de datos 2026 poblada con {count} registros")
 
-def buscar_credenciales(dominio=None, usuario=None, limite=200):
+def buscar_credenciales(dominio=None, usuario=None, limite=500):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     if dominio:
@@ -236,10 +221,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v19.0*\n\n"
-        f"🔹 *Base de datos:* {total:,} credenciales\n"
+        f"🕵️ *NINJA HUNTER BOT v20.0 - 2026*\n\n"
+        f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"🔹 *Comandos disponibles:* 14\n\n"
+        f"🔹 *Comandos disponibles:* 13\n\n"
         f"📌 *Categorías:*\n"
         f"🔍 Filtraciones - Buscar credenciales\n"
         f"🛡️ Vulnerabilidades - Buscar CVE\n"
@@ -251,7 +236,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v19.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v20.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -289,7 +274,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔹 *Registros:* {total:,}\n"
         f"🔹 *Tokens gratuitos:* 10\n"
         f"🔹 *Costo por búsqueda:* 0.5 tokens\n"
-        f"🔹 *Comandos:* 14 disponibles\n"
+        f"🔹 *Comandos:* 13 disponibles\n"
         f"🔹 *Estado:* 🟢 Activo",
         parse_mode='Markdown'
     )
@@ -311,7 +296,7 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await update.message.reply_text(f"🔍 *Buscando: {busqueda}*\n⏳ Procesando...", parse_mode='Markdown')
-    resultados = buscar_credenciales(dominio=busqueda, limite=200)
+    resultados = buscar_credenciales(dominio=busqueda, limite=500)
     tokens_restantes = get_tokens(user_id)
     
     if not resultados:
@@ -343,7 +328,7 @@ async def buscar_usuario_command(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(f"❌ *Tokens insuficientes*", parse_mode='Markdown')
         return
     
-    resultados = buscar_credenciales(usuario=busqueda, limite=200)
+    resultados = buscar_credenciales(usuario=busqueda, limite=500)
     if not resultados:
         await update.message.reply_text(f"❌ *Sin resultados para usuario: {busqueda}*", parse_mode='Markdown')
         return
@@ -519,7 +504,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES - 2026*\n\n"
+            "🔍 *FILTRACIONES 2026*\n\n"
             "/buscar <dominio> - Buscar credenciales\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
@@ -558,7 +543,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.route('/')
 def home():
     total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "19.0", "registros": total})
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "20.0", "registros": total})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
