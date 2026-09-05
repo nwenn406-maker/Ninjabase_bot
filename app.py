@@ -92,9 +92,6 @@ def poblar_datos_muestra():
         {"dominio": "mobbex.com", "usuario": "admin@mobbex.com", "contraseña": "M0bb3x2026!", "fecha": "2026-01-15"},
         {"dominio": "mobbex.com", "usuario": "dev@mobbex.com", "contraseña": "Dev2026!", "fecha": "2026-01-15"},
         {"dominio": "gmail.com", "usuario": "juanperez@gmail.com", "contraseña": "Juan2026!", "fecha": "2026-02-10"},
-        {"dominio": "gmail.com", "usuario": "mariagonzalez@gmail.com", "contraseña": "Maria2026!", "fecha": "2026-02-10"},
-        {"dominio": "netflix.com", "usuario": "user1@netflix.com", "contraseña": "Netflix2026!", "fecha": "2026-03-05"},
-        {"dominio": "paypal.com", "usuario": "user1@paypal.com", "contraseña": "Paypal2026!", "fecha": "2026-04-01"},
     ]
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -239,7 +236,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v19.0 - TIEMPO REAL*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v19.0*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos disponibles:* 14\n\n"
@@ -513,7 +510,7 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES ====================
+# ==================== MANEJADOR DE BOTONES (CORREGIDO) ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
