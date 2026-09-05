@@ -49,54 +49,17 @@ def init_db():
     poblar_base_datos()
 
 def poblar_base_datos():
-    """Pobla con más de 100 credenciales para cada dominio"""
     datos_reales = []
-    
-    # Generar 100+ credenciales para mobbex.com
     for i in range(1, 101):
-        datos_reales.append({
-            "dominio": "mobbex.com",
-            "usuario": f"usuario{i}@mobbex.com",
-            "contraseña": f"Pass{i}2024!",
-            "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-        })
-    
-    # Generar 100+ credenciales para gmail.com
+        datos_reales.append({"dominio": "mobbex.com", "usuario": f"usuario{i}@mobbex.com", "contraseña": f"Pass{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     for i in range(1, 101):
-        datos_reales.append({
-            "dominio": "gmail.com",
-            "usuario": f"user{i}@gmail.com",
-            "contraseña": f"Gmail{i}2024!",
-            "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-        })
-    
-    # Generar 100+ credenciales para hotmail.com
+        datos_reales.append({"dominio": "gmail.com", "usuario": f"user{i}@gmail.com", "contraseña": f"Gmail{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     for i in range(1, 101):
-        datos_reales.append({
-            "dominio": "hotmail.com",
-            "usuario": f"user{i}@hotmail.com",
-            "contraseña": f"Hot{i}2024!",
-            "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-        })
-    
-    # Generar 100+ credenciales para netflix.com
+        datos_reales.append({"dominio": "hotmail.com", "usuario": f"user{i}@hotmail.com", "contraseña": f"Hot{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     for i in range(1, 101):
-        datos_reales.append({
-            "dominio": "netflix.com",
-            "usuario": f"user{i}@netflix.com",
-            "contraseña": f"Netflix{i}2024!",
-            "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-        })
-    
-    # Generar 100+ credenciales para paypal.com
+        datos_reales.append({"dominio": "netflix.com", "usuario": f"user{i}@netflix.com", "contraseña": f"Netflix{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     for i in range(1, 101):
-        datos_reales.append({
-            "dominio": "paypal.com",
-            "usuario": f"user{i}@paypal.com",
-            "contraseña": f"Paypal{i}2024!",
-            "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-        })
-    
+        datos_reales.append({"dominio": "paypal.com", "usuario": f"user{i}@paypal.com", "contraseña": f"Paypal{i}2024!", "fecha": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"})
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     count = 0
@@ -238,10 +201,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     total = contar_registros()
     keyboard = [
-        [InlineKeyboardButton("🔍 Filtraciones", callback_data='filtraciones_menu')],
-        [InlineKeyboardButton("🛡️ Vulnerabilidades", callback_data='vuln_menu')],
-        [InlineKeyboardButton("🔧 Red y OSINT", callback_data='red_menu')],
-        [InlineKeyboardButton("💰 Saldo", callback_data='saldo_menu')],
+        [InlineKeyboardButton("🔍 Filtraciones", callback_data='filtraciones')],
+        [InlineKeyboardButton("🛡️ Vulnerabilidades", callback_data='vulnerabilidades')],
+        [InlineKeyboardButton("🔧 Red y OSINT", callback_data='red')],
+        [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
         f"🕵️ *NINJA HUNTER BOT v15.0*\n\n"
@@ -329,7 +292,6 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     zip_data = crear_zip_resultados(resultados, busqueda)
     mensaje = f"🔍 *RESULTADOS*\n📌 *Búsqueda:* {busqueda}\n📊 *Encontrados:* {len(resultados)}\n💰 *Saldo:* {tokens_restantes}\n\n"
     
-    # Mostrar primeros 10 resultados
     for i, r in enumerate(resultados[:10], 1):
         mensaje += f"🔹 *{i}.* {r['usuario']} | {r['contraseña']}\n"
     
@@ -518,7 +480,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     
-    if query.data == 'filtraciones_menu':
+    if query.data == 'filtraciones':
         await query.edit_message_text(
             "🔍 *FILTRACIONES*\n\n"
             "/buscar <dominio> - Buscar credenciales\n"
@@ -528,7 +490,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📎 *Resultados en ZIP*",
             parse_mode='Markdown'
         )
-    elif query.data == 'vuln_menu':
+    elif query.data == 'vulnerabilidades':
         await query.edit_message_text(
             "🛡️ *VULNERABILIDADES*\n\n"
             "/vuln <servicio> - Buscar CVE\n"
@@ -538,7 +500,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/vuln_scan google.com",
             parse_mode='Markdown'
         )
-    elif query.data == 'red_menu':
+    elif query.data == 'red':
         await query.edit_message_text(
             "🔧 *RED Y OSINT*\n\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
@@ -548,7 +510,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/deuda <cuil> - BCRA",
             parse_mode='Markdown'
         )
-    elif query.data == 'saldo_menu':
+    elif query.data == 'saldo':
         await query.edit_message_text(
             f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
