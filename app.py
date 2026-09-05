@@ -473,37 +473,50 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == 'filtraciones':
         await query.edit_message_text(
-            "🔍 *FILTRACIONES*\n\n"
+            "🔍 *FILTRACIONES - COMANDOS DISPONIBLES*\n\n"
+            "📌 *Usa estos comandos:*\n"
             "/buscar <dominio> - Buscar credenciales\n"
             "/buscar_usuario <usuario> - Buscar por usuario\n\n"
+            "📎 *Ejemplos:*\n"
+            "/buscar mobbex.com\n"
+            "/buscar_usuario admin\n\n"
             f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
-            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
-            "📎 *Resultados en ZIP*",
+            "💳 *Cada búsqueda consume 0.5 tokens*\n\n"
+            "📎 *Los resultados se entregan en archivos ZIP*",
             parse_mode='Markdown'
         )
     elif query.data == 'vulnerabilidades':
         await query.edit_message_text(
-            "🛡️ *VULNERABILIDADES*\n\n"
+            "🛡️ *VULNERABILIDADES - COMANDOS DISPONIBLES*\n\n"
+            "📌 *Usa estos comandos:*\n"
             "/vuln <servicio> - Buscar CVE\n"
             "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
-            "📌 *Ejemplos:*\n"
+            "📎 *Ejemplos:*\n"
             "/vuln apache\n"
             "/vuln_scan google.com",
             parse_mode='Markdown'
         )
     elif query.data == 'red':
         await query.edit_message_text(
-            "🔧 *RED Y OSINT*\n\n"
+            "🔧 *RED Y OSINT - COMANDOS DISPONIBLES*\n\n"
+            "📌 *Usa estos comandos:*\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
             "/subdomain <URL> - Subdominios\n"
             "/ip <IP> - Geolocalización\n"
             "/email <email> - Have I Been Pwned\n"
-            "/deuda <cuil> - BCRA",
+            "/deuda <cuil> - BCRA\n\n"
+            "📎 *Ejemplos:*\n"
+            "/scan google.com\n"
+            "/ip 8.8.8.8",
             parse_mode='Markdown'
         )
     elif query.data == 'saldo':
         await query.edit_message_text(
-            f"💰 *Saldo: {get_tokens(user_id)} tokens*",
+            f"💰 *SALDO DE TOKENS*\n\n"
+            f"🔹 *Tokens disponibles:* {get_tokens(user_id)}\n"
+            f"💳 *Cada búsqueda consume:* 0.5 tokens\n\n"
+            f"📊 *Puedes hacer:* {int(get_tokens(user_id) / 0.5)} búsquedas más\n\n"
+            "💡 *Para recargar tokens, contacta al administrador.*",
             parse_mode='Markdown'
         )
 
