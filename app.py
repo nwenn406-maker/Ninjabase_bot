@@ -7,6 +7,8 @@ import zipfile
 import io
 import csv
 import json
+import asyncio
+from flask import Flask, request, jsonify
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -14,6 +16,8 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
+
+app = Flask(__name__)
 
 # ==================== BASE DE DATOS 2026 ====================
 DB_NAME = "filtraciones2026.db"
@@ -197,7 +201,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v27.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v28.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos:* 13 disponibles\n\n"
@@ -212,7 +216,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v27.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v28.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -469,7 +473,7 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES (CORREGIDO) ====================
+# ==================== MANEJADOR DE BOTONES ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -513,29 +517,55 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# ==================== MAIN ====================
+# ==================== WEBHOOK ====================
 
-def main():
-    init_db()
-    
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("saldo", saldo_command))
-    application.add_handler(CommandHandler("stats", stats_command))
-    application.add_handler(CommandHandler("buscar", buscar_command))
-    application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
-    application.add_handler(CommandHandler("vuln", vuln_command))
-    application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
-    application.add_handler(CommandHandler("scan", scan_command))
-    application.add_handler(CommandHandler("subdomain", subdomain_command))
-    application.add_handler(CommandHandler("ip", ip_command))
-    application.add_handler(CommandHandler("email", email_command))
-    application.add_handler(CommandHandler("deuda", deuda_command))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🤖 NINJA HUNTER BOT v27.0 iniciado en Fly.io")
-    application.run_polling()
+@app.route('/')
+def home():
+    total = contar_registros()
+    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "28.0", "registros": total})
+
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    try:
+        data = request.get_json()
+        if not data:
+            return "No data", 400
+        update = Update.de_json(data, application.bot)
+        asyncio.run(application.process_update(update))
+        return "OK", 200
+    except Exception as e:
+        return "Error", 500
+
+# ==================== CONFIGURACIÓN ====================
+
+init_db()
+
+application = Application.builder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("saldo", saldo_command))
+application.add_handler(CommandHandler("stats", stats_command))
+application.add_handler(CommandHandler("buscar", buscar_command))
+application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
+application.add_handler(CommandHandler("vuln", vuln_command))
+application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
+application.add_handler(CommandHandler("scan", scan_command))
+application.add_handler(CommandHandler("subdomain", subdomain_command))
+application.add_handler(CommandHandler("ip", ip_command))
+application.add_handler(CommandHandler("email", email_command))
+application.add_handler(CommandHandler("deuda", deuda_command))
+application.add_handler(CallbackQueryHandler(button_handler))
+
+async def setup_webhook():
+    await application.initialize()
+    webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
+    await application.bot.set_webhook(url=webhook_url)
+    print(f"✅ Webhook configurado: {webhook_url}")
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(setup_webhook())
 
 if __name__ == '__main__':
-    main()
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
