@@ -8,28 +8,19 @@ import csv
 import random
 import requests
 import socket
-import threading
-import time
-from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import asyncio
 from datetime import datetime
 
 # ==================== MODO FANTASMA ====================
-os.environ['FLASK_ENV'] = 'production'
-os.environ['FLASK_DEBUG'] = '0'
+os.environ['PYTHONHASHSEED'] = '0'
 logging.basicConfig(level=logging.CRITICAL)
-logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
-logging.getLogger('telegram').setLevel(logging.CRITICAL)
 logging.getLogger('httpx').setLevel(logging.CRITICAL)
+logging.getLogger('telegram').setLevel(logging.CRITICAL)
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
-
-app = Flask(__name__)
-app.config['PROPAGATE_EXCEPTIONS'] = False
 
 # ==================== BASE DE DATOS 2026 ====================
 DB_NAME = "filtraciones2026.db"
@@ -44,7 +35,6 @@ def init_db():
             usuario TEXT,
             contraseña TEXT,
             fecha TEXT,
-            fuente TEXT,
             hash TEXT UNIQUE
         )
     ''')
@@ -138,7 +128,7 @@ def crear_zip_resultados(resultados, busqueda):
         zip_file.writestr(f"{busqueda}_credenciales.json", json.dumps(resultados, indent=2))
     return zip_buffer.getvalue()
 
-# ==================== FUNCIONES DE VULNERABILIDADES ====================
+# ==================== FUNCIONES ====================
 def buscar_cve(servicio):
     try:
         response = requests.get(f'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={servicio}', timeout=15)
@@ -174,7 +164,6 @@ def escanear_puertos(host):
         return abiertos, servicios
     except: return [], servicios
 
-# ==================== FUNCIONES OSINT ====================
 def geolocalizar_ip(ip):
     try:
         response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
@@ -219,10 +208,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v22.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v25.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"🔹 *Comandos disponibles:* 13\n\n"
+        f"🔹 *Comandos:* /buscar, /scan, /ip, /email, /deuda, /vuln, /vuln_scan, /subdomain\n\n"
         f"📌 *Categorías:*\n"
         f"🔍 Filtraciones - Buscar credenciales\n"
         f"🛡️ Vulnerabilidades - Buscar CVE\n"
@@ -234,7 +223,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v22.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v25.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -303,10 +292,8 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     zip_data = crear_zip_resultados(resultados, busqueda)
     mensaje = f"🔍 *RESULTADOS*\n📌 *Búsqueda:* {busqueda}\n📊 *Encontrados:* {len(resultados)}\n💰 *Saldo:* {tokens_restantes}\n\n"
-    
     for i, r in enumerate(resultados[:10], 1):
         mensaje += f"🔹 *{i}.* {r['usuario']} | {r['contraseña']}\n"
-    
     if len(resultados) > 10:
         mensaje += f"\n📊 *Y {len(resultados)-10} más en el ZIP*"
     
@@ -536,18 +523,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# ==================== FLASK (SOLO PARA MANTENER EL SERVICIO VIVO) ====================
-
-@app.route('/')
-def home():
-    total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "22.0", "registros": total})
-
-@app.route('/health')
-def health():
-    return jsonify({"status": "ok"})
-
-# ==================== CONFIGURACIÓN ====================
+# ==================== MAIN ====================
 
 def main():
     init_db()
@@ -568,17 +544,8 @@ def main():
     application.add_handler(CommandHandler("deuda", deuda_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # Iniciar polling en un hilo separado
-    def run_polling():
-        print("🤖 Bot iniciado en modo POLLING (v22.0)")
-        application.run_polling()
-    
-    polling_thread = threading.Thread(target=run_polling, daemon=True)
-    polling_thread.start()
-    
-    # Mantener Flask vivo para Render
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    print("🤖 NINJA HUNTER BOT v25.0 iniciado en Fly.io")
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
