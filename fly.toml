@@ -3,7 +3,7 @@ primary_region = "gru"
 
 [build]
   [build.args]
-    PYTHON_VERSION = "3.11"
+    PYTHON_VERSION = "3.12"
 
 [env]
   PORT = "8080"
