@@ -6,6 +6,7 @@ import socket
 import zipfile
 import io
 import csv
+import json
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -196,7 +197,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v26.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v27.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos:* 13 disponibles\n\n"
@@ -211,7 +212,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v26.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v27.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -468,14 +469,15 @@ async def deuda_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ==================== MANEJADOR DE BOTONES ====================
+# ==================== MANEJADOR DE BOTONES (CORREGIDO) ====================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
+    data = query.data
     
-    if query.data == 'filtraciones':
+    if data == 'filtraciones':
         await query.edit_message_text(
             "🔍 *FILTRACIONES 2026*\n\n"
             "/buscar <dominio> - Buscar credenciales\n"
@@ -485,7 +487,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📎 *Resultados en ZIP*",
             parse_mode='Markdown'
         )
-    elif query.data == 'vulnerabilidades':
+    elif data == 'vulnerabilidades':
         await query.edit_message_text(
             "🛡️ *VULNERABILIDADES*\n\n"
             "/vuln <servicio> - Buscar CVE\n"
@@ -495,7 +497,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/vuln_scan google.com",
             parse_mode='Markdown'
         )
-    elif query.data == 'red':
+    elif data == 'red':
         await query.edit_message_text(
             "🔧 *RED Y OSINT*\n\n"
             "/scan <URL/IP> - Escaneo de puertos\n"
@@ -505,7 +507,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/deuda <cuil> - BCRA",
             parse_mode='Markdown'
         )
-    elif query.data == 'saldo':
+    elif data == 'saldo':
         await query.edit_message_text(
             f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
@@ -532,7 +534,7 @@ def main():
     application.add_handler(CommandHandler("deuda", deuda_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    print("🤖 NINJA HUNTER BOT v26.0 iniciado en Fly.io")
+    print("🤖 NINJA HUNTER BOT v27.0 iniciado en Fly.io")
     application.run_polling()
 
 if __name__ == '__main__':
