@@ -16,8 +16,8 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 
-# ==================== BASE DE DATOS 2026 ====================
-DB_NAME = "filtraciones2026.db"
+# ==================== BASE DE DATOS REAL ====================
+DB_NAME = "filtraciones_reales.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -36,34 +36,44 @@ def init_db():
     c.execute('CREATE INDEX IF NOT EXISTS idx_usuario ON credenciales(usuario)')
     conn.commit()
     conn.close()
-    poblar_base_datos_2026()
+    # Cargar datos reales desde archivo CSV si existe
+    cargar_datos_reales()
 
-def poblar_base_datos_2026():
+def cargar_datos_reales():
+    """Carga datos reales desde un archivo CSV"""
+    archivos = ["filtraciones.csv", "data_2026.csv", "breach.csv", "leak.csv"]
+    for archivo in archivos:
+        if os.path.exists(archivo):
+            importar_csv(archivo)
+            return
+    print("⚠️ No se encontraron archivos de filtraciones. El bot espera datos reales.")
+
+def importar_csv(archivo):
+    """Importa credenciales reales desde CSV"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    dominios = [
-        "mobbex.com", "rebill.com", "monei.com", "gmail.com", "hotmail.com",
-        "netflix.com", "spotify.com", "paypal.com", "mercadolibre.com",
-        "facebook.com", "instagram.com", "amazon.com", "microsoft.com",
-        "apple.com", "google.com", "twitter.com", "linkedin.com",
-        "whatsapp.com", "telegram.com", "discord.com", "github.com",
-        "reddit.com", "tiktok.com", "youtube.com"
-    ]
     count = 0
-    for dominio in dominios:
-        for i in range(1, 101):
-            usuario = f"user{i}@{dominio}"
-            contraseña = f"{dominio.split('.')[0]}{i}2026!"
-            fecha = f"2026-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
-            hash_reg = f"{dominio}{usuario}{contraseña}"
-            try:
-                c.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)',
-                         (dominio, usuario, contraseña, fecha, hash_reg))
-                count += 1
-            except: pass
-    conn.commit()
-    conn.close()
-    print(f"✅ Base de datos 2026 poblada con {count} registros")
+    try:
+        with open(archivo, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 3:
+                    dominio = row[0].strip()
+                    usuario = row[1].strip()
+                    contraseña = row[2].strip()
+                    fecha = row[3].strip() if len(row) > 3 else "2026"
+                    hash_reg = f"{dominio}{usuario}{contraseña}"
+                    try:
+                        c.execute('INSERT OR IGNORE INTO credenciales (dominio, usuario, contraseña, fecha, hash) VALUES (?, ?, ?, ?, ?)',
+                                 (dominio, usuario, contraseña, fecha, hash_reg))
+                        count += 1
+                    except: pass
+        conn.commit()
+        print(f"✅ Importados {count} registros reales desde {archivo}")
+    except Exception as e:
+        print(f"❌ Error al importar {archivo}: {e}")
+    finally:
+        conn.close()
 
 def buscar_credenciales(dominio=None, usuario=None, limite=500):
     conn = sqlite3.connect(DB_NAME)
@@ -117,8 +127,9 @@ def crear_zip_resultados(resultados, busqueda):
         zip_file.writestr(f"{busqueda}_credenciales.json", json.dumps(resultados, indent=2))
     return zip_buffer.getvalue()
 
-# ==================== FUNCIONES ====================
+# ==================== FUNCIONES REALES ====================
 def buscar_cve(servicio):
+    """API REAL - NIST CVE"""
     try:
         response = requests.get(f'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={servicio}', timeout=15)
         if response.status_code == 200:
@@ -137,6 +148,7 @@ def buscar_cve(servicio):
     except: return []
 
 def escanear_puertos(host):
+    """Escaneo REAL de puertos"""
     puertos = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443]
     servicios = {21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS', 80:'HTTP', 110:'POP3', 135:'RPC', 139:'NetBIOS', 143:'IMAP', 443:'HTTPS', 445:'SMB', 993:'IMAPS', 995:'POP3S', 1723:'PPTP', 3306:'MySQL', 3389:'RDP', 5432:'PostgreSQL', 5900:'VNC', 8080:'HTTP-Proxy', 8443:'HTTPS-Alt'}
     abiertos = []
@@ -154,6 +166,7 @@ def escanear_puertos(host):
     except: return [], servicios
 
 def geolocalizar_ip(ip):
+    """API REAL - ip-api.com"""
     try:
         response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
         data = response.json()
@@ -163,8 +176,9 @@ def geolocalizar_ip(ip):
     except: return None
 
 def verificar_email_breach(email):
+    """API REAL - Have I Been Pwned"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        headers = {'User-Agent': 'NINJA-HUNTER-BOT/1.0 (https://t.me/ninjabotdata)'}
         response = requests.get(f'https://haveibeenpwned.com/api/v3/breachedaccount/{email}', headers=headers, timeout=10)
         if response.status_code == 200:
             return [b.get('Name') for b in response.json()]
@@ -174,6 +188,7 @@ def verificar_email_breach(email):
     except: return None
 
 def consultar_deuda_bcra(cuil):
+    """API REAL - BCRA"""
     try:
         cuil_clean = ''.join(filter(str.isdigit, cuil))
         response = requests.get(f'https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/{cuil_clean}', timeout=15)
@@ -191,26 +206,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     total = contar_registros()
     keyboard = [
+        [InlineKeyboardButton("🔍 Filtraciones", callback_data='filtraciones')],
+        [InlineKeyboardButton("🛡️ Vulnerabilidades", callback_data='vulnerabilidades')],
+        [InlineKeyboardButton("🔧 Red y OSINT", callback_data='red')],
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v31.0 - 2026*\n\n"
-        f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
+        f"🕵️ *NINJA HUNTER BOT v34.0 - REAL*\n\n"
+        f"🔹 *Base de datos:* {total:,} credenciales reales\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos:* 13 disponibles\n\n"
-        f"📌 *Comandos disponibles:*\n"
-        f"/buscar <dominio> - Buscar credenciales\n"
-        f"/buscar_usuario <usuario> - Buscar por usuario\n"
-        f"/vuln <servicio> - Buscar CVE\n"
-        f"/vuln_scan <URL> - Analizar vulnerabilidades\n"
-        f"/scan <URL/IP> - Escaneo de puertos\n"
-        f"/subdomain <URL> - Subdominios\n"
-        f"/ip <IP> - Geolocalización\n"
-        f"/email <email> - Have I Been Pwned\n"
-        f"/deuda <cuil> - BCRA\n"
-        f"/saldo - Ver tokens\n"
-        f"/stats - Estado del bot\n"
-        f"/help - Esta ayuda\n\n"
+        f"📌 *Categorías:*\n"
+        f"🔍 Filtraciones - Buscar credenciales\n"
+        f"🛡️ Vulnerabilidades - Buscar CVE reales\n"
+        f"🔧 Red y OSINT - Escaneo, IP, email\n\n"
         f"📎 *Resultados en ZIP*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
@@ -218,19 +227,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v31.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v34.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
-        "/buscar <dominio> - Buscar credenciales\n"
+        "/buscar <dominio> - Buscar credenciales reales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
         "🛡️ *VULNERABILIDADES:*\n"
-        "/vuln <servicio> - Buscar CVE\n"
+        "/vuln <servicio> - Buscar CVE reales\n"
         "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
         "🔧 *RED Y OSINT:*\n"
-        "/scan <URL/IP> - Escaneo de puertos\n"
+        "/scan <URL/IP> - Escaneo de puertos real\n"
         "/subdomain <URL> - Subdominios\n"
-        "/ip <IP> - Geolocalización\n"
-        "/email <email> - Have I Been Pwned\n"
-        "/deuda <cuil> - BCRA\n\n"
+        "/ip <IP> - Geolocalización real\n"
+        "/email <email> - Have I Been Pwned real\n"
+        "/deuda <cuil> - BCRA real\n\n"
         "📌 *GENERALES:*\n"
         "/start - Menú principal\n"
         "/saldo - Ver tokens\n"
@@ -482,7 +491,37 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     
-    if query.data == 'saldo':
+    if query.data == 'filtraciones':
+        await query.edit_message_text(
+            "🔍 *FILTRACIONES REALES*\n\n"
+            "/buscar <dominio> - Buscar credenciales\n"
+            "/buscar_usuario <usuario> - Buscar por usuario\n\n"
+            f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
+            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
+            "📎 *Resultados en ZIP*",
+            parse_mode='Markdown'
+        )
+    elif query.data == 'vulnerabilidades':
+        await query.edit_message_text(
+            "🛡️ *VULNERABILIDADES REALES*\n\n"
+            "/vuln <servicio> - Buscar CVE\n"
+            "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
+            "📌 *Ejemplos:*\n"
+            "/vuln apache\n"
+            "/vuln_scan google.com",
+            parse_mode='Markdown'
+        )
+    elif query.data == 'red':
+        await query.edit_message_text(
+            "🔧 *RED Y OSINT REAL*\n\n"
+            "/scan <URL/IP> - Escaneo de puertos\n"
+            "/subdomain <URL> - Subdominios\n"
+            "/ip <IP> - Geolocalización\n"
+            "/email <email> - Have I Been Pwned\n"
+            "/deuda <cuil> - BCRA",
+            parse_mode='Markdown'
+        )
+    elif query.data == 'saldo':
         await query.edit_message_text(
             f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
@@ -509,7 +548,7 @@ def main():
     application.add_handler(CommandHandler("deuda", deuda_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    print("🤖 NINJA HUNTER BOT v31.0 iniciado en Fly.io")
+    print("🤖 NINJA HUNTER BOT v34.0 - REAL iniciado en Fly.io")
     application.run_polling()
 
 if __name__ == '__main__':
