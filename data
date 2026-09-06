@@ -1,1 +1,31 @@
 renaper.csv
+dni,nombre,apellido,fecha_nac,domicilio,localidad,provincia,cuil
+12345678,Juan,Pérez,15/03/1985,Av. Corrientes 1234,CABA,Buenos Aires,20-12345678-4
+87654321,María,González,22/07/1990,Calle Santa Fe 567,CABA,Buenos Aires,27-87654321-3
+11223344,Carlos,Rodríguez,10/11/1982,Av. 9 de Julio 890,Córdoba,Córdoba,20-11223344-1
+deudas.csv
+cuil,denominacion,situacion,monto,entidades,score
+20-12345678-4,Juan Pérez,Normal,150000,Banco Nación,750
+27-87654321-3,María González,Riesgo bajo,50000,Banco Galicia,680
+20-11223344-1,Carlos Rodríguez,Riesgo medio,200000,Banco Santander,600
+dnrpa.csv
+patente,marca,modelo,año,titular,dni_titular
+AB123CD,Toyota,Corolla,2020,Juan Pérez,12345678
+EF456GH,Volkswagen,Golf,2019,María González,87654321
+IJ789KL,Ford,Focus,2021,Carlos Rodríguez,11223344
+familiares.csv
+dni_principal,dni_familiar,nombre_familiar,vinculo
+12345678,87654321,María González,Cónyuge
+12345678,11223344,Carlos Pérez,Hijo
+87654321,22334455,Ana González,Madre
+telefonos.csv
+numero,titular,dni_titular,compania,provincia
+1123456789,Juan Pérez,12345678,Movistar,CABA
+1198765432,María González,87654321,Claro,Buenos Aires
+1165432109,Carlos Rodríguez,11223344,Personal,Córdoba
+emails.csv
+email,password,dominio,fuente
+admin@mobbex.com,M0bb3x2024,mobbex.com,Filtración Mobbex
+dev@rebill.com,R3b1ll2024,rebill.com,Filtración Rebill
+admin@monei.com,M0n3i2024,monei.com,Filtración Monei
+juanperez@gmail.com,Juan2024!,gmail.com,Filtración Gmail
