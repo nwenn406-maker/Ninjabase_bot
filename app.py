@@ -7,8 +7,7 @@ import zipfile
 import io
 import csv
 import json
-import asyncio
-from flask import Flask, request, jsonify
+import time
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -16,8 +15,6 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
-
-app = Flask(__name__)
 
 # ==================== BASE DE DATOS 2026 ====================
 DB_NAME = "filtraciones2026.db"
@@ -120,7 +117,7 @@ def crear_zip_resultados(resultados, busqueda):
         zip_file.writestr(f"{busqueda}_credenciales.json", json.dumps(resultados, indent=2))
     return zip_buffer.getvalue()
 
-# ==================== FUNCIONES DE VULNERABILIDADES ====================
+# ==================== FUNCIONES ====================
 def buscar_cve(servicio):
     try:
         response = requests.get(f'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={servicio}', timeout=15)
@@ -156,7 +153,6 @@ def escanear_puertos(host):
         return abiertos, servicios
     except: return [], servicios
 
-# ==================== FUNCIONES OSINT ====================
 def geolocalizar_ip(ip):
     try:
         response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
@@ -195,20 +191,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     total = contar_registros()
     keyboard = [
-        [InlineKeyboardButton("🔍 Filtraciones", callback_data='filtraciones')],
-        [InlineKeyboardButton("🛡️ Vulnerabilidades", callback_data='vulnerabilidades')],
-        [InlineKeyboardButton("🔧 Red y OSINT", callback_data='red')],
         [InlineKeyboardButton("💰 Saldo", callback_data='saldo')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA HUNTER BOT v28.0 - 2026*\n\n"
+        f"🕵️ *NINJA HUNTER BOT v31.0 - 2026*\n\n"
         f"🔹 *Base de datos:* {total:,} credenciales 2026\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"🔹 *Comandos:* 13 disponibles\n\n"
-        f"📌 *Categorías:*\n"
-        f"🔍 Filtraciones - Buscar credenciales\n"
-        f"🛡️ Vulnerabilidades - Buscar CVE\n"
-        f"🔧 Red y OSINT - Escaneo, IP, email\n\n"
+        f"📌 *Comandos disponibles:*\n"
+        f"/buscar <dominio> - Buscar credenciales\n"
+        f"/buscar_usuario <usuario> - Buscar por usuario\n"
+        f"/vuln <servicio> - Buscar CVE\n"
+        f"/vuln_scan <URL> - Analizar vulnerabilidades\n"
+        f"/scan <URL/IP> - Escaneo de puertos\n"
+        f"/subdomain <URL> - Subdominios\n"
+        f"/ip <IP> - Geolocalización\n"
+        f"/email <email> - Have I Been Pwned\n"
+        f"/deuda <cuil> - BCRA\n"
+        f"/saldo - Ver tokens\n"
+        f"/stats - Estado del bot\n"
+        f"/help - Esta ayuda\n\n"
         f"📎 *Resultados en ZIP*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
@@ -216,7 +218,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🕵️ *AYUDA - NINJA HUNTER BOT v28.0*\n\n"
+        "🕵️ *AYUDA - NINJA HUNTER BOT v31.0*\n\n"
         "🔍 *FILTRACIONES:*\n"
         "/buscar <dominio> - Buscar credenciales\n"
         "/buscar_usuario <usuario> - Buscar por usuario\n\n"
@@ -479,93 +481,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
-    data = query.data
     
-    if data == 'filtraciones':
-        await query.edit_message_text(
-            "🔍 *FILTRACIONES 2026*\n\n"
-            "/buscar <dominio> - Buscar credenciales\n"
-            "/buscar_usuario <usuario> - Buscar por usuario\n\n"
-            f"💰 *Saldo:* {get_tokens(user_id)} tokens\n"
-            "💳 *Cada búsqueda:* 0.5 tokens\n\n"
-            "📎 *Resultados en ZIP*",
-            parse_mode='Markdown'
-        )
-    elif data == 'vulnerabilidades':
-        await query.edit_message_text(
-            "🛡️ *VULNERABILIDADES*\n\n"
-            "/vuln <servicio> - Buscar CVE\n"
-            "/vuln_scan <URL> - Analizar vulnerabilidades\n\n"
-            "📌 *Ejemplos:*\n"
-            "/vuln apache\n"
-            "/vuln_scan google.com",
-            parse_mode='Markdown'
-        )
-    elif data == 'red':
-        await query.edit_message_text(
-            "🔧 *RED Y OSINT*\n\n"
-            "/scan <URL/IP> - Escaneo de puertos\n"
-            "/subdomain <URL> - Subdominios\n"
-            "/ip <IP> - Geolocalización\n"
-            "/email <email> - Have I Been Pwned\n"
-            "/deuda <cuil> - BCRA",
-            parse_mode='Markdown'
-        )
-    elif data == 'saldo':
+    if query.data == 'saldo':
         await query.edit_message_text(
             f"💰 *Saldo: {get_tokens(user_id)} tokens*",
             parse_mode='Markdown'
         )
 
-# ==================== WEBHOOK ====================
+# ==================== MAIN ====================
 
-@app.route('/')
-def home():
-    total = contar_registros()
-    return jsonify({"status": "online", "bot": "Ninja Hunter Bot", "version": "28.0", "registros": total})
-
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    try:
-        data = request.get_json()
-        if not data:
-            return "No data", 400
-        update = Update.de_json(data, application.bot)
-        asyncio.run(application.process_update(update))
-        return "OK", 200
-    except Exception as e:
-        return "Error", 500
-
-# ==================== CONFIGURACIÓN ====================
-
-init_db()
-
-application = Application.builder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("saldo", saldo_command))
-application.add_handler(CommandHandler("stats", stats_command))
-application.add_handler(CommandHandler("buscar", buscar_command))
-application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
-application.add_handler(CommandHandler("vuln", vuln_command))
-application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
-application.add_handler(CommandHandler("scan", scan_command))
-application.add_handler(CommandHandler("subdomain", subdomain_command))
-application.add_handler(CommandHandler("ip", ip_command))
-application.add_handler(CommandHandler("email", email_command))
-application.add_handler(CommandHandler("deuda", deuda_command))
-application.add_handler(CallbackQueryHandler(button_handler))
-
-async def setup_webhook():
-    await application.initialize()
-    webhook_url = f"https://ninjabase-bot.fly.dev/{TOKEN}"
-    await application.bot.set_webhook(url=webhook_url)
-    print(f"✅ Webhook configurado: {webhook_url}")
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-loop.run_until_complete(setup_webhook())
+def main():
+    init_db()
+    
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("saldo", saldo_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("buscar", buscar_command))
+    application.add_handler(CommandHandler("buscar_usuario", buscar_usuario_command))
+    application.add_handler(CommandHandler("vuln", vuln_command))
+    application.add_handler(CommandHandler("vuln_scan", vuln_scan_command))
+    application.add_handler(CommandHandler("scan", scan_command))
+    application.add_handler(CommandHandler("subdomain", subdomain_command))
+    application.add_handler(CommandHandler("ip", ip_command))
+    application.add_handler(CommandHandler("email", email_command))
+    application.add_handler(CommandHandler("deuda", deuda_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    print("🤖 NINJA HUNTER BOT v31.0 iniciado en Fly.io")
+    application.run_polling()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    main()
