@@ -9,9 +9,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-# ✅ SOLUCIÓN: Usar mkdir -p (ya lo tienes) pero con bandera -p
-# ✅ CORRECCIÓN: Asegurar que no falle si existe
-RUN mkdir -p data databases || true
+# ✅ ELIMINAMOS la línea problemática
+# Las carpetas se crean automáticamente
 
 EXPOSE 8080
 
