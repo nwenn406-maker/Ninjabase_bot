@@ -11,13 +11,14 @@ import json
 import base64
 import time
 import hashlib
+import threading
 from datetime import datetime
+from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ==================== MODO FANTASMA ====================
 
-# 1. Ofuscar logs y rastreo
 os.environ['PYTHONHASHSEED'] = '0'
 logging.basicConfig(level=logging.CRITICAL)
 logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
@@ -25,13 +26,11 @@ logging.getLogger('telegram').setLevel(logging.CRITICAL)
 logging.getLogger('httpx').setLevel(logging.CRITICAL)
 logging.getLogger('sqlite3').setLevel(logging.CRITICAL)
 
-# 2. Token ofuscado
 TOKEN_RAW = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN_RAW:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 TOKEN = base64.b64encode(TOKEN_RAW.encode()).decode()
 
-# 3. Headers falsos
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -40,10 +39,8 @@ HEADERS = {
     'Connection': 'keep-alive',
 }
 
-# 4. Base de datos con nombre engañoso
 DB_NAME = "system_cache.db"
 
-# 5. Limpiar logs automáticamente
 def limpiar_logs():
     try:
         if os.path.exists('nohup.out'): os.remove('nohup.out')
@@ -51,34 +48,19 @@ def limpiar_logs():
         if os.path.exists('bot.log'): os.remove('bot.log')
     except: pass
 
-# 6. Proxy rotativo
-PROXIES = []
-def get_proxy():
-    if not PROXIES:
-        try:
-            response = requests.get('https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all', timeout=5)
-            PROXIES.extend([p.strip() for p in response.text.split('\n') if p.strip()])
-        except: pass
-    if PROXIES:
-        proxy = random.choice(PROXIES)
-        return {'http': f'http://{proxy}', 'https': f'https://{proxy}'}
-    return None
-
-def request_con_proxy(url, method='GET', data=None, timeout=10):
-    for intento in range(3):
-        try:
-            proxy = get_proxy()
-            if method == 'GET':
-                response = requests.get(url, headers=HEADERS, proxies=proxy, timeout=timeout)
-            else:
-                response = requests.post(url, headers=HEADERS, json=data, proxies=proxy, timeout=timeout)
-            if response.status_code == 200:
-                return response
-        except: continue
-        time.sleep(random.uniform(0.5, 1.5))
-    return None
-
 limpiar_logs()
+
+# ==================== FLASK SERVER (PARA MANTENER EL PROCESO VIVO) ====================
+
+flask_app = Flask(__name__)
+
+@flask_app.route('/')
+def home():
+    return jsonify({"status": "online", "bot": "Ninja Data Bot", "version": "61.0"})
+
+@flask_app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 # ==================== BASE DE DATOS ====================
 
@@ -178,7 +160,6 @@ def init_db():
     conn.commit()
     conn.close()
     cargar_datos()
-    print("✅ Bases de datos inicializadas")
 
 def cargar_datos():
     archivos = {
@@ -431,11 +412,10 @@ def consultar_cache17(id):
 
 def geolocalizar_ip(ip):
     try:
-        r = request_con_proxy(f'http://ip-api.com/json/{ip}')
-        if r:
-            data = r.json()
-            if data.get('status') == 'success':
-                return data
+        response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
+        data = response.json()
+        if data.get('status') == 'success':
+            return data
     except: return None
 
 def escanear_puertos(host):
@@ -492,7 +472,7 @@ async def start(update, context):
         [InlineKeyboardButton("💰 Tokens", callback_data='tokens')],
     ]
     await update.message.reply_text(
-        f"🕵️ *SISTEMA v61.0 - MODO FANTASMA*\n\n"
+        f"🕵️ *SISTEMA v62.0 - MODO FANTASMA*\n\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
         f"📌 *Países:* 8\n"
         f"🌎 *Argentina, Guatemala, México, El Salvador,*\n"
@@ -502,7 +482,7 @@ async def start(update, context):
         parse_mode='Markdown'
     )
 
-# ==================== ARGENTINA ====================
+# ==================== COMANDOS ARGENTINA ====================
 
 async def arg_menu(update, context):
     await update.callback_query.edit_message_text(
@@ -562,197 +542,6 @@ async def dnrpa_command(update, context):
     msg += f"🏭 {data['brand']}\n🚗 {data['model']}\n📅 {data['year']}\n👤 {data['owner']}\n🆔 {data['owner_id']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== GUATEMALA ====================
-
-async def gt_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇬🇹 *GUATEMALA - OSINT*\n\n"
-        f"/gt_dpi <dpi>\n/gt_nit <nit>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def gt_dpi_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /gt_dpi <dpi>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache7(id)
-    if not data:
-        await update.message.reply_text(f"❌ DPI {id} no encontrado.")
-        return
-    msg = f"📄 *RENAP Guatemala - DPI {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n🔑 {data['nit']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== MÉXICO ====================
-
-async def mx_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇲🇽 *MÉXICO - OSINT*\n\n"
-        f"/mx_imss <curp>\n/mx_sat <rfc>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def mx_imss_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /mx_imss <curp>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache9(id)
-    if not data:
-        await update.message.reply_text(f"❌ CURP {id} no encontrado.")
-        return
-    msg = f"🇲🇽 *IMSS - CURP {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📱 {data['phone']}\n📍 {data['addr']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== EL SALVADOR ====================
-
-async def sv_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇸🇻 *EL SALVADOR - OSINT*\n\n"
-        f"/sv_dui <dui>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def sv_dui_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /sv_dui <dui>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache11(id)
-    if not data:
-        await update.message.reply_text(f"❌ DUI {id} no encontrado.")
-        return
-    msg = f"🇸🇻 *DUI - {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== HONDURAS ====================
-
-async def hn_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇭🇳 *HONDURAS - OSINT*\n\n"
-        f"/hn_dni <dni>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def hn_dni_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /hn_dni <dni>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache12(id)
-    if not data:
-        await update.message.reply_text(f"❌ DNI {id} no encontrado.")
-        return
-    msg = f"🇭🇳 *DNI - {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== CHILE ====================
-
-async def cl_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇨🇱 *CHILE - OSINT*\n\n"
-        f"/cl_rc <rut>\n/cl_sii <rut>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def cl_rc_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /cl_rc <rut>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache13(id)
-    if not data:
-        await update.message.reply_text(f"❌ RUT {id} no encontrado.")
-        return
-    msg = f"🇨🇱 *Registro Civil - RUT {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== BRASIL ====================
-
-async def br_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇧🇷 *BRASIL - OSINT*\n\n"
-        f"/br_cpf <cpf>\n/br_rf <cpf>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def br_cpf_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /br_cpf <cpf>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache15(id)
-    if not data:
-        await update.message.reply_text(f"❌ CPF {id} no encontrado.")
-        return
-    msg = f"🇧🇷 *CPF - {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== ECUADOR ====================
-
-async def ec_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇪🇨 *ECUADOR - OSINT*\n\n"
-        f"/ec_cedula <cedula>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def ec_cedula_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /ec_cedula <cedula>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache17(id)
-    if not data:
-        await update.message.reply_text(f"❌ Cédula {id} no encontrada.")
-        return
-    msg = f"🇪🇨 *Registro Civil - Cédula {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== COMANDOS GENERALES ====================
 
 async def email_command(update, context):
     if not context.args:
@@ -824,140 +613,77 @@ async def ip_command(update, context):
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-async def scan_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /scan <URL/IP>")
-        return
-    target = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    await update.message.reply_text(f"🔎 Escaneando {target}...", parse_mode='Markdown')
-    puertos, servicios = escanear_puertos(target)
-    if not puertos:
-        await update.message.reply_text(f"🔒 No se encontraron puertos abiertos en {target}.", parse_mode='Markdown')
-        return
-    msg = f"🔎 *Puertos abiertos en {target}:*\n\n"
-    for p in puertos:
-        msg += f"✅ Puerto {p} → {servicios.get(p, 'Desconocido')}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
+# ==================== GUATEMALA ====================
 
-async def subdomain_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /subdomain <URL>")
-        return
-    dominio = context.args[0].replace('http://', '').replace('https://', '').split('/')[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    subdominios = descubrir_subdominios(dominio)
-    if not subdominios:
-        await update.message.reply_text(f"🔍 No se encontraron subdominios para {dominio}.", parse_mode='Markdown')
-        return
-    msg = f"🌐 *Subdominios encontrados para {dominio}:*\n\n"
-    for s in subdominios:
-        msg += f"🔹 {s}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def saldo_command(update, context):
-    user_id = update.effective_user.id
-    await update.message.reply_text(
-        f"💰 *SALDO DE TOKENS*\n\n"
-        f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"💳 *Costo por consulta:* 1 token\n"
-        f"📊 *Consultas disponibles:* {get_tokens(user_id)}",
+async def gt_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇬🇹 *GUATEMALA - OSINT*\n\n"
+        f"/gt_dpi <dpi>\n/gt_nit <nit>\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
         parse_mode='Markdown'
     )
 
-async def button_handler(update, context):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    
-    if query.data == 'arg_menu':
-        await arg_menu(update, context)
-    elif query.data == 'gt_menu':
-        await gt_menu(update, context)
-    elif query.data == 'mx_menu':
-        await mx_menu(update, context)
-    elif query.data == 'sv_menu':
-        await sv_menu(update, context)
-    elif query.data == 'hn_menu':
-        await hn_menu(update, context)
-    elif query.data == 'cl_menu':
-        await cl_menu(update, context)
-    elif query.data == 'br_menu':
-        await br_menu(update, context)
-    elif query.data == 'ec_menu':
-        await ec_menu(update, context)
-    elif query.data == 'security':
-        await query.edit_message_text(
-            f"🔧 *RED Y SEGURIDAD*\n\n"
-            f"/scan <URL/IP> - Puertos\n"
-            f"/subdomain <URL> - Subdominios\n\n"
-            f"💰 *Tokens:* {get_tokens(user_id)}",
-            parse_mode='Markdown'
-        )
-    elif query.data == 'tokens':
-        await query.edit_message_text(
-            f"💰 *Tokens: {get_tokens(user_id)}*",
-            parse_mode='Markdown'
-        )
+async def gt_dpi_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /gt_dpi <dpi>")
+        return
+    id = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_cache7(id)
+    if not data:
+        await update.message.reply_text(f"❌ DPI {id} no encontrado.")
+        return
+    msg = f"📄 *RENAP Guatemala - DPI {id}:*\n\n"
+    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n🔑 {data['nit']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
-# ==================== MAIN ====================
+async def gt_nit_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /gt_nit <nit>")
+        return
+    id = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_cache8(id)
+    if not data:
+        await update.message.reply_text(f"❌ NIT {id} no encontrado.")
+        return
+    msg = f"📄 *SAT Guatemala - NIT {id}:*\n\n"
+    msg += f"👤 {data['name']}\n📍 {data['addr']}\n📱 {data['phone']}\n🚗 {data['vehicle']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
-def main():
-    init_db()
-    app = Application.builder().token(base64.b64decode(TOKEN).decode()).build()
-    
-    # Argentina
-    app.add_handler(CommandHandler("dni", dni_command))
-    app.add_handler(CommandHandler("deuda", deuda_command))
-    app.add_handler(CommandHandler("dnrpa", dnrpa_command))
-    app.add_handler(CommandHandler("email", email_command))
-    app.add_handler(CommandHandler("titular", titular_command))
-    app.add_handler(CommandHandler("url", url_command))
-    app.add_handler(CommandHandler("ip", ip_command))
-    
-    # Guatemala
-    app.add_handler(CommandHandler("gt_dpi", gt_dpi_command))
-    app.add_handler(CommandHandler("gt_nit", gt_nit_command))
-    
-    # México
-    app.add_handler(CommandHandler("mx_imss", mx_imss_command))
-    app.add_handler(CommandHandler("mx_sat", mx_sat_command))
-    
-    # El Salvador
-    app.add_handler(CommandHandler("sv_dui", sv_dui_command))
-    
-    # Honduras
-    app.add_handler(CommandHandler("hn_dni", hn_dni_command))
-    
-    # Chile
-    app.add_handler(CommandHandler("cl_rc", cl_rc_command))
-    app.add_handler(CommandHandler("cl_sii", cl_sii_command))
-    
-    # Brasil
-    app.add_handler(CommandHandler("br_cpf", br_cpf_command))
-    app.add_handler(CommandHandler("br_rf", br_rf_command))
-    
-    # Ecuador
-    app.add_handler(CommandHandler("ec_cedula", ec_cedula_command))
-    
-    # Generales
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("saldo", saldo_command))
-    app.add_handler(CommandHandler("scan", scan_command))
-    app.add_handler(CommandHandler("subdomain", subdomain_command))
-    
-    app.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🤖 SISTEMA v61.0 - MODO FANTASMA iniciado")
-    print("📊 8 países integrados")
-    print("🔐 Modo fantasma: activado")
-    app.run_polling()
+# ==================== MÉXICO ====================
 
-if __name__ == '__main__':
-    main()
+async def mx_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇲🇽 *MÉXICO - OSINT*\n\n"
+        f"/mx_imss <curp>\n/mx_sat <rfc>\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def mx_imss_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /mx_imss <curp>")
+        return
+    id = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_cache9(id)
+    if not data:
+        await update.message.reply_text(f"❌ CURP {id} no encontrado.")
+        return
+    msg = f"🇲🇽 *IMSS - CURP {id}:*\n\n"
+    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📱 {data['phone']}\n📍 {data['addr']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def mx_sat_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /mx_sat <rfc
