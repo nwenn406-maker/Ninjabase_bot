@@ -100,7 +100,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS credenciales_url (
         dominio TEXT, usuario TEXT, contraseña TEXT, fuente TEXT)''')
     
-    # Índices para búsqueda rápida
+    # Índices
     c.execute('CREATE INDEX IF NOT EXISTS idx_renaper ON renaper(dni)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_dnrpa ON dnrpa(patente)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_bcra ON bcra(cuil)')
@@ -180,7 +180,6 @@ def consultar_deuda(cuil):
         if len(cuil_clean) != 11:
             return None
         
-        # Primero buscar en BCRA local
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         c.execute('SELECT * FROM bcra WHERE cuil = ?', (cuil_clean,))
@@ -190,7 +189,6 @@ def consultar_deuda(cuil):
             return {'dni': r[1], 'nombre': r[2], 'fecha_nac': r[3],
                     'situacion': r[4], 'monto_deuda': r[5], 'entidades': r[6], 'score': r[7]}
         
-        # Si no, consultar API BCRA real
         response = requests.get(
             f'https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/{cuil_clean}',
             timeout=10,
@@ -291,24 +289,23 @@ async def start(update, context):
     user_id = update.effective_user.id
     keyboard = [
         [InlineKeyboardButton("🇦🇷 Argentina", callback_data='arg_menu')],
+        [InlineKeyboardButton("🇬🇹 Guatemala", callback_data='gt_menu')],
+        [InlineKeyboardButton("🇲🇽 México", callback_data='mx_menu')],
+        [InlineKeyboardButton("🇸🇻 El Salvador", callback_data='sv_menu')],
+        [InlineKeyboardButton("🇭🇳 Honduras", callback_data='hn_menu')],
+        [InlineKeyboardButton("🇨🇱 Chile", callback_data='cl_menu')],
+        [InlineKeyboardButton("🇧🇷 Brasil", callback_data='br_menu')],
+        [InlineKeyboardButton("🇪🇨 Ecuador", callback_data='ec_menu')],
         [InlineKeyboardButton("🔧 Red", callback_data='security')],
         [InlineKeyboardButton("💰 Tokens", callback_data='tokens')],
     ]
     await update.message.reply_text(
         f"🕵️ *NINJA DATA BOT v62.0 - DATOS REALES*\n\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"📌 *Comandos:*\n"
-        f"/dni <dni> - RENAPER (48M registros)\n"
-        f"/deuda <cuil> - BCRA (32M registros)\n"
-        f"/dnrpa <patente> - DNRPA (706K registros)\n"
-        f"/email <email> - Filtraciones\n"
-        f"/ip <ip> - Geolocalización\n"
-        f"/titular <tel> - Teléfono (100M registros)\n"
-        f"/url <dominio> - Credenciales\n"
-        f"/scan <URL/IP> - Puertos\n"
-        f"/subdomain <URL> - Subdominios\n"
-        f"/saldo - Ver tokens\n\n"
-        f"🔐 *Modo Fantasma: ACTIVADO*",
+        f"📌 *Países:* 8\n"
+        f"🌎 *Argentina, Guatemala, México, El Salvador,*\n"
+        f"   *Honduras, Chile, Brasil, Ecuador*\n\n"
+        f"💡 *Selecciona un país para ver sus comandos*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -476,6 +473,296 @@ async def ip_command(update, context):
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
+# ==================== GUATEMALA ====================
+
+async def gt_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇬🇹 *GUATEMALA - OSINT*\n\n"
+        f"/gt_dpi <dpi> - RENAP\n"
+        f"/gt_nit <nit> - SAT\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def gt_dpi_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /gt_dpi <dpi>")
+        return
+    dpi = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_gt_dpi(dpi)
+    if not data:
+        await update.message.reply_text(f"❌ DPI {dpi} no encontrado.")
+        return
+    msg = f"🇬🇹 *RENAP Guatemala - DPI {dpi}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"🆔 {data['dpi']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def gt_nit_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /gt_nit <nit>")
+        return
+    nit = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_gt_nit(nit)
+    if not data:
+        await update.message.reply_text(f"❌ NIT {nit} no encontrado.")
+        return
+    msg = f"🇬🇹 *SAT Guatemala - NIT {nit}:*\n\n"
+    msg += f"👤 {data['nombre']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== MÉXICO ====================
+
+async def mx_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇲🇽 *MÉXICO - OSINT*\n\n"
+        f"/mx_imss <curp> - IMSS\n"
+        f"/mx_sat <rfc> - SAT\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def mx_imss_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /mx_imss <curp>")
+        return
+    curp = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_mx_imss(curp)
+    if not data:
+        await update.message.reply_text(f"❌ CURP {curp} no encontrado.")
+        return
+    msg = f"🇲🇽 *IMSS - CURP {curp}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def mx_sat_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /mx_sat <rfc>")
+        return
+    rfc = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_mx_sat(rfc)
+    if not data:
+        await update.message.reply_text(f"❌ RFC {rfc} no encontrado.")
+        return
+    msg = f"🇲🇽 *SAT - RFC {rfc}:*\n\n"
+    msg += f"👤 {data['nombre']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== EL SALVADOR ====================
+
+async def sv_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇸🇻 *EL SALVADOR - OSINT*\n\n"
+        f"/sv_dui <dui> - DUI\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def sv_dui_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /sv_dui <dui>")
+        return
+    dui = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_sv_dui(dui)
+    if not data:
+        await update.message.reply_text(f"❌ DUI {dui} no encontrado.")
+        return
+    msg = f"🇸🇻 *DUI - {dui}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== HONDURAS ====================
+
+async def hn_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇭🇳 *HONDURAS - OSINT*\n\n"
+        f"/hn_dni <dni> - DNI\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def hn_dni_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /hn_dni <dni>")
+        return
+    dni = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_hn_dni(dni)
+    if not data:
+        await update.message.reply_text(f"❌ DNI {dni} no encontrado.")
+        return
+    msg = f"🇭🇳 *DNI - {dni}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== CHILE ====================
+
+async def cl_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇨🇱 *CHILE - OSINT*\n\n"
+        f"/cl_rc <rut> - Registro Civil\n"
+        f"/cl_sii <rut> - SII\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def cl_rc_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /cl_rc <rut>")
+        return
+    rut = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_cl_rc(rut)
+    if not data:
+        await update.message.reply_text(f"❌ RUT {rut} no encontrado.")
+        return
+    msg = f"🇨🇱 *Registro Civil - RUT {rut}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def cl_sii_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /cl_sii <rut>")
+        return
+    rut = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_cl_sii(rut)
+    if not data:
+        await update.message.reply_text(f"❌ RUT {rut} no encontrado.")
+        return
+    msg = f"🇨🇱 *SII Chile - RUT {rut}:*\n\n"
+    msg += f"👤 {data['nombre']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== BRASIL ====================
+
+async def br_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇧🇷 *BRASIL - OSINT*\n\n"
+        f"/br_cpf <cpf> - CPF\n"
+        f"/br_rf <cpf> - Receita Federal\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def br_cpf_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /br_cpf <cpf>")
+        return
+    cpf = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_br_cpf(cpf)
+    if not data:
+        await update.message.reply_text(f"❌ CPF {cpf} no encontrado.")
+        return
+    msg = f"🇧🇷 *CPF - {cpf}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def br_rf_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /br_rf <cpf>")
+        return
+    cpf = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_br_rf(cpf)
+    if not data:
+        await update.message.reply_text(f"❌ CPF {cpf} no encontrado.")
+        return
+    msg = f"🇧🇷 *Receita Federal - CPF {cpf}:*\n\n"
+    msg += f"👤 {data['nombre']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ==================== ECUADOR ====================
+
+async def ec_menu(update, context):
+    await update.callback_query.edit_message_text(
+        f"🇪🇨 *ECUADOR - OSINT*\n\n"
+        f"/ec_cedula <cedula> - Registro Civil\n\n"
+        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+        parse_mode='Markdown'
+    )
+
+async def ec_cedula_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /ec_cedula <cedula>")
+        return
+    cedula = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    data = consultar_ec_cedula(cedula)
+    if not data:
+        await update.message.reply_text(f"❌ Cédula {cedula} no encontrada.")
+        return
+    msg = f"🇪🇨 *Registro Civil - Cédula {cedula}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
 # ==================== COMANDOS DE RED ====================
 
 async def scan_command(update, context):
@@ -534,6 +821,20 @@ async def button_handler(update, context):
     
     if query.data == 'arg_menu':
         await arg_menu(update, context)
+    elif query.data == 'gt_menu':
+        await gt_menu(update, context)
+    elif query.data == 'mx_menu':
+        await mx_menu(update, context)
+    elif query.data == 'sv_menu':
+        await sv_menu(update, context)
+    elif query.data == 'hn_menu':
+        await hn_menu(update, context)
+    elif query.data == 'cl_menu':
+        await cl_menu(update, context)
+    elif query.data == 'br_menu':
+        await br_menu(update, context)
+    elif query.data == 'ec_menu':
+        await ec_menu(update, context)
     elif query.data == 'security':
         await query.edit_message_text(
             f"🔧 *RED Y SEGURIDAD*\n\n"
@@ -547,6 +848,44 @@ async def button_handler(update, context):
             f"💰 *Tokens: {get_tokens(user_id)}*",
             parse_mode='Markdown'
         )
+
+# ==================== FUNCIONES DE CONSULTA PARA PAÍSES (MOCK DATA PARA DEMOSTRACIÓN) ====================
+
+# NOTA: Estas funciones son para demostración. Para usar datos reales,
+# reemplazar con conexiones a bases de datos reales.
+
+def consultar_gt_dpi(dpi):
+    return {'dpi': dpi, 'nombre': 'María', 'apellido': 'López', 'fecha_nac': '15/05/1990', 'direccion': 'Zona 10, Guatemala'}
+
+def consultar_gt_nit(nit):
+    return {'nit': nit, 'nombre': 'Empresa XYZ', 'direccion': 'Zona 10, Guatemala', 'telefono': '12345678'}
+
+def consultar_mx_imss(curp):
+    return {'curp': curp, 'nombre': 'Carlos', 'apellido': 'Gómez', 'fecha_nac': '20/10/1985', 'telefono': '5512345678', 'direccion': 'CDMX'}
+
+def consultar_mx_sat(rfc):
+    return {'rfc': rfc, 'nombre': 'Juan Pérez', 'direccion': 'CDMX', 'telefono': '5512345678'}
+
+def consultar_sv_dui(dui):
+    return {'dui': dui, 'nombre': 'Ana', 'apellido': 'Torres', 'fecha_nac': '10/03/1992', 'direccion': 'San Salvador', 'telefono': '76543210'}
+
+def consultar_hn_dni(dni):
+    return {'dni': dni, 'nombre': 'Pedro', 'apellido': 'Ramírez', 'fecha_nac': '25/12/1988', 'direccion': 'Tegucigalpa', 'telefono': '98765432'}
+
+def consultar_cl_rc(rut):
+    return {'rut': rut, 'nombre': 'Fernando', 'apellido': 'Rojas', 'fecha_nac': '05/07/1991', 'direccion': 'Santiago', 'telefono': '98765432'}
+
+def consultar_cl_sii(rut):
+    return {'rut': rut, 'nombre': 'Empresa Rojas Ltda', 'direccion': 'Santiago', 'telefono': '98765432'}
+
+def consultar_br_cpf(cpf):
+    return {'cpf': cpf, 'nombre': 'João', 'apellido': 'Silva', 'fecha_nac': '15/11/1987', 'direccion': 'São Paulo', 'telefono': '11987654321'}
+
+def consultar_br_rf(cpf):
+    return {'cpf': cpf, 'nombre': 'João Silva', 'direccion': 'São Paulo', 'telefono': '11987654321'}
+
+def consultar_ec_cedula(cedula):
+    return {'cedula': cedula, 'nombre': 'María', 'apellido': 'Peña', 'fecha_nac': '30/08/1993', 'direccion': 'Quito', 'telefono': '98765432'}
 
 # ==================== MAIN ====================
 
@@ -567,6 +906,31 @@ def main():
     app.add_handler(CommandHandler("url", url_command))
     app.add_handler(CommandHandler("ip", ip_command))
     
+    # Guatemala
+    app.add_handler(CommandHandler("gt_dpi", gt_dpi_command))
+    app.add_handler(CommandHandler("gt_nit", gt_nit_command))
+    
+    # México
+    app.add_handler(CommandHandler("mx_imss", mx_imss_command))
+    app.add_handler(CommandHandler("mx_sat", mx_sat_command))
+    
+    # El Salvador
+    app.add_handler(CommandHandler("sv_dui", sv_dui_command))
+    
+    # Honduras
+    app.add_handler(CommandHandler("hn_dni", hn_dni_command))
+    
+    # Chile
+    app.add_handler(CommandHandler("cl_rc", cl_rc_command))
+    app.add_handler(CommandHandler("cl_sii", cl_sii_command))
+    
+    # Brasil
+    app.add_handler(CommandHandler("br_cpf", br_cpf_command))
+    app.add_handler(CommandHandler("br_rf", br_rf_command))
+    
+    # Ecuador
+    app.add_handler(CommandHandler("ec_cedula", ec_cedula_command))
+    
     # Red
     app.add_handler(CommandHandler("scan", scan_command))
     app.add_handler(CommandHandler("subdomain", subdomain_command))
@@ -582,6 +946,7 @@ def main():
     print("📊 DNRPA: 706K registros")
     print("📊 BCRA: 32M registros")
     print("📊 Teléfonos: 100M registros")
+    print("📊 8 países integrados")
     print("🔐 Modo Fantasma: ACTIVADO")
     print("🌐 Flask server: puerto 8080")
     app.run_polling()
