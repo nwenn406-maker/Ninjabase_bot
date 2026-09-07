@@ -1,6 +1,34 @@
 app = "ninjabase-bot"
-primary_region = "gru"
 
-[[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+
+[machine]
+  [[machine.cpus]]
+    cpu_type = "shared"
+    cores = 1
+
+  [machine.memory]
+    memory = 256
+
+[autoscaling]
+  min_machines = 1
+  max_machines = 1
