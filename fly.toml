@@ -28,7 +28,3 @@ app = "ninjabase-bot"
 
   [machine.memory]
     memory = 256
-
-[autoscaling]
-  min_machines = 1
-  max_machines = 1
