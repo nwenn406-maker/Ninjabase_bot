@@ -66,52 +66,102 @@ def run_flask():
     port = int(os.environ.get('PORT', 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
-# ==================== BASE DE DATOS REAL ====================
+# ==================== BASE DE DATOS ====================
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    
-    # RENAPER - 48M registros reales
-    c.execute('''CREATE TABLE IF NOT EXISTS renaper (
-        dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
-        domicilio TEXT, localidad TEXT, provincia TEXT, cuil TEXT, telefono TEXT)''')
-    
-    # DNRPA - 706,464 filas reales
-    c.execute('''CREATE TABLE IF NOT EXISTS dnrpa (
-        patente TEXT PRIMARY KEY, marca TEXT, modelo TEXT, año TEXT,
-        titular TEXT, dni_titular TEXT)''')
-    
-    # BCRA - 32M registros reales
-    c.execute('''CREATE TABLE IF NOT EXISTS bcra (
-        cuil TEXT PRIMARY KEY, dni TEXT, nombre TEXT, fecha_nac TEXT,
-        situacion TEXT, monto_deuda REAL, entidades TEXT, score INTEGER)''')
-    
-    # Teléfonos - 100M registros reales
-    c.execute('''CREATE TABLE IF NOT EXISTS telefonos (
-        numero TEXT PRIMARY KEY, titular TEXT, dni_titular TEXT,
-        compania TEXT, provincia TEXT)''')
-    
-    # Emails filtrados
-    c.execute('''CREATE TABLE IF NOT EXISTS emails (
-        email TEXT PRIMARY KEY, password TEXT, dominio TEXT, fuente TEXT)''')
-    
-    # Credenciales por URL
-    c.execute('''CREATE TABLE IF NOT EXISTS credenciales_url (
-        dominio TEXT, usuario TEXT, contraseña TEXT, fuente TEXT)''')
-    
-    # Índices
-    c.execute('CREATE INDEX IF NOT EXISTS idx_renaper ON renaper(dni)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_dnrpa ON dnrpa(patente)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_bcra ON bcra(cuil)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_telefonos ON telefonos(numero)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_emails ON emails(email)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx_credenciales ON credenciales_url(dominio)')
-    
-    conn.commit()
-    conn.close()
-    cargar_datos()
-    print("✅ Bases de datos reales inicializadas")
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        
+        # ARGENTINA - RENAPER (48M registros)
+        c.execute('''CREATE TABLE IF NOT EXISTS renaper (
+            dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            domicilio TEXT, localidad TEXT, provincia TEXT, cuil TEXT, telefono TEXT)''')
+        
+        # ARGENTINA - DNRPA (706K registros)
+        c.execute('''CREATE TABLE IF NOT EXISTS dnrpa (
+            patente TEXT PRIMARY KEY, marca TEXT, modelo TEXT, año TEXT,
+            titular TEXT, dni_titular TEXT)''')
+        
+        # ARGENTINA - BCRA (32M registros)
+        c.execute('''CREATE TABLE IF NOT EXISTS bcra (
+            cuil TEXT PRIMARY KEY, dni TEXT, nombre TEXT, fecha_nac TEXT,
+            situacion TEXT, monto_deuda REAL, entidades TEXT, score INTEGER)''')
+        
+        # ARGENTINA - Teléfonos (100M registros)
+        c.execute('''CREATE TABLE IF NOT EXISTS telefonos (
+            numero TEXT PRIMARY KEY, titular TEXT, dni_titular TEXT,
+            compania TEXT, provincia TEXT)''')
+        
+        # Filtraciones de emails
+        c.execute('''CREATE TABLE IF NOT EXISTS emails (
+            email TEXT PRIMARY KEY, password TEXT, dominio TEXT, fuente TEXT)''')
+        
+        # Credenciales por URL
+        c.execute('''CREATE TABLE IF NOT EXISTS credenciales_url (
+            dominio TEXT, usuario TEXT, contraseña TEXT, fuente TEXT)''')
+        
+        # GUATEMALA
+        c.execute('''CREATE TABLE IF NOT EXISTS guatemala_renap (
+            dpi TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS guatemala_sat (
+            nit TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
+        
+        # MÉXICO
+        c.execute('''CREATE TABLE IF NOT EXISTS mexico_imss (
+            curp TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            telefono TEXT, direccion TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS mexico_sat (
+            rfc TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
+        
+        # EL SALVADOR
+        c.execute('''CREATE TABLE IF NOT EXISTS salvador_dui (
+            dui TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        # HONDURAS
+        c.execute('''CREATE TABLE IF NOT EXISTS honduras_dni (
+            dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        # CHILE
+        c.execute('''CREATE TABLE IF NOT EXISTS chile_rc (
+            rut TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS chile_sii (
+            rut TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
+        
+        # BRASIL
+        c.execute('''CREATE TABLE IF NOT EXISTS brasil_cpf (
+            cpf TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS brasil_rf (
+            cpf TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
+        
+        # ECUADOR
+        c.execute('''CREATE TABLE IF NOT EXISTS ecuador_cedula (
+            cedula TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+            direccion TEXT, telefono TEXT)''')
+        
+        # Índices
+        c.execute('CREATE INDEX IF NOT EXISTS idx_renaper ON renaper(dni)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_dnrpa ON dnrpa(patente)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_bcra ON bcra(cuil)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_telefonos ON telefonos(numero)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_emails ON emails(email)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_credenciales ON credenciales_url(dominio)')
+        
+        conn.commit()
+        conn.close()
+        cargar_datos()
+        print("✅ Bases de datos inicializadas")
+    except Exception as e:
+        print(f"❌ Error en base de datos: {e}")
 
 def cargar_datos():
     archivos = {
@@ -120,59 +170,102 @@ def cargar_datos():
         'bcra': 'data/bcra.csv',
         'telefonos': 'data/telefonos.csv',
         'emails': 'data/emails.csv',
-        'credenciales_url': 'data/credenciales.csv'
+        'credenciales_url': 'data/credenciales.csv',
+        'guatemala_renap': 'data/guatemala_renap.csv',
+        'guatemala_sat': 'data/guatemala_sat.csv',
+        'mexico_imss': 'data/mexico_imss.csv',
+        'mexico_sat': 'data/mexico_sat.csv',
+        'salvador_dui': 'data/salvador_dui.csv',
+        'honduras_dni': 'data/honduras_dni.csv',
+        'chile_rc': 'data/chile_rc.csv',
+        'chile_sii': 'data/chile_sii.csv',
+        'brasil_cpf': 'data/brasil_cpf.csv',
+        'brasil_rf': 'data/brasil_rf.csv',
+        'ecuador_cedula': 'data/ecuador_cedula.csv'
     }
     for tabla, archivo in archivos.items():
         if os.path.exists(archivo):
             importar_csv(archivo, tabla)
-            print(f"✅ Cargados datos de {archivo}")
 
 def importar_csv(archivo, tabla):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    with open(archivo, 'r', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
-            try:
-                if tabla == 'renaper':
-                    c.execute('INSERT OR IGNORE INTO renaper VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
-                elif tabla == 'dnrpa':
-                    c.execute('INSERT OR IGNORE INTO dnrpa VALUES (?,?,?,?,?,?)', row[:6])
-                elif tabla == 'bcra':
-                    c.execute('INSERT OR IGNORE INTO bcra VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                elif tabla == 'telefonos':
-                    c.execute('INSERT OR IGNORE INTO telefonos VALUES (?,?,?,?,?)', row[:5])
-                elif tabla == 'emails':
-                    c.execute('INSERT OR IGNORE INTO emails VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'credenciales_url':
-                    c.execute('INSERT OR IGNORE INTO credenciales_url VALUES (?,?,?,?)', row[:4])
-            except: pass
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        with open(archivo, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                try:
+                    if tabla == 'renaper':
+                        c.execute('INSERT OR IGNORE INTO renaper VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
+                    elif tabla == 'dnrpa':
+                        c.execute('INSERT OR IGNORE INTO dnrpa VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'bcra':
+                        c.execute('INSERT OR IGNORE INTO bcra VALUES (?,?,?,?,?,?,?,?)', row[:8])
+                    elif tabla == 'telefonos':
+                        c.execute('INSERT OR IGNORE INTO telefonos VALUES (?,?,?,?,?)', row[:5])
+                    elif tabla == 'emails':
+                        c.execute('INSERT OR IGNORE INTO emails VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'credenciales_url':
+                        c.execute('INSERT OR IGNORE INTO credenciales_url VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'guatemala_renap':
+                        c.execute('INSERT OR IGNORE INTO guatemala_renap VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'guatemala_sat':
+                        c.execute('INSERT OR IGNORE INTO guatemala_sat VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'mexico_imss':
+                        c.execute('INSERT OR IGNORE INTO mexico_imss VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'mexico_sat':
+                        c.execute('INSERT OR IGNORE INTO mexico_sat VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'salvador_dui':
+                        c.execute('INSERT OR IGNORE INTO salvador_dui VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'honduras_dni':
+                        c.execute('INSERT OR IGNORE INTO honduras_dni VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'chile_rc':
+                        c.execute('INSERT OR IGNORE INTO chile_rc VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'chile_sii':
+                        c.execute('INSERT OR IGNORE INTO chile_sii VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'brasil_cpf':
+                        c.execute('INSERT OR IGNORE INTO brasil_cpf VALUES (?,?,?,?,?,?)', row[:6])
+                    elif tabla == 'brasil_rf':
+                        c.execute('INSERT OR IGNORE INTO brasil_rf VALUES (?,?,?,?)', row[:4])
+                    elif tabla == 'ecuador_cedula':
+                        c.execute('INSERT OR IGNORE INTO ecuador_cedula VALUES (?,?,?,?,?,?)', row[:6])
+                except:
+                    pass
+        conn.commit()
+        conn.close()
+        print(f"✅ Cargados datos de {archivo}")
+    except Exception as e:
+        print(f"❌ Error cargando {archivo}: {e}")
 
-# ==================== FUNCIONES DE CONSULTA REAL ====================
+# ==================== FUNCIONES DE CONSULTA ====================
 
 def consultar_renaper(dni):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM renaper WHERE dni = ?', (dni,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'dni': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3],
-                'domicilio': r[4], 'localidad': r[5], 'provincia': r[6], 'cuil': r[7], 'telefono': r[8]}
-    return None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM renaper WHERE dni = ?', (dni,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dni': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3],
+                    'domicilio': r[4], 'localidad': r[5], 'provincia': r[6], 'cuil': r[7], 'telefono': r[8]}
+        return None
+    except:
+        return None
 
 def consultar_patente(patente):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM dnrpa WHERE patente = ?', (patente.upper(),))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'marca': r[1], 'modelo': r[2], 'año': r[3], 'titular': r[4], 'dni_titular': r[5]}
-    return None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM dnrpa WHERE patente = ?', (patente.upper(),))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'marca': r[1], 'modelo': r[2], 'año': r[3], 'titular': r[4], 'dni_titular': r[5]}
+        return None
+    except:
+        return None
 
 def consultar_deuda(cuil):
     try:
@@ -188,52 +281,196 @@ def consultar_deuda(cuil):
         if r:
             return {'dni': r[1], 'nombre': r[2], 'fecha_nac': r[3],
                     'situacion': r[4], 'monto_deuda': r[5], 'entidades': r[6], 'score': r[7]}
-        
-        response = requests.get(
-            f'https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/{cuil_clean}',
-            timeout=10,
-            headers=HEADERS
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 200 and data.get('results'):
-                return data['results']
         return None
     except:
         return None
 
 def consultar_titular(telefono):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM telefonos WHERE numero = ?', (telefono,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'titular': r[1], 'dni_titular': r[2], 'compania': r[3], 'provincia': r[4]}
-    return None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM telefonos WHERE numero = ?', (telefono,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'titular': r[1], 'dni_titular': r[2], 'compania': r[3], 'provincia': r[4]}
+        return None
+    except:
+        return None
 
 def consultar_email(email):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT password, dominio, fuente FROM emails WHERE email = ?', (email,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'password': r[0], 'dominio': r[1], 'fuente': r[2]}
-    return None
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT password, dominio, fuente FROM emails WHERE email = ?', (email,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'password': r[0], 'dominio': r[1], 'fuente': r[2]}
+        return None
+    except:
+        return None
 
 def buscar_credenciales_url(dominio):
     credenciales = []
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT usuario, contraseña, fuente FROM credenciales_url WHERE dominio = ?', (dominio,))
-    for r in c.fetchall():
-        credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
-    c.execute('SELECT email, password, fuente FROM emails WHERE dominio = ?', (dominio,))
-    for r in c.fetchall():
-        credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT usuario, contraseña, fuente FROM credenciales_url WHERE dominio = ?', (dominio,))
+        for r in c.fetchall():
+            credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
+        c.execute('SELECT email, password, fuente FROM emails WHERE dominio = ?', (dominio,))
+        for r in c.fetchall():
+            credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
+        conn.close()
+    except:
+        pass
     return credenciales
+
+# ==================== FUNCIONES PARA PAÍSES ====================
+
+def consultar_gt_dpi(dpi):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM guatemala_renap WHERE dpi = ?', (dpi,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dpi': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_gt_nit(nit):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM guatemala_sat WHERE nit = ?', (nit,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'nit': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
+        return None
+    except:
+        return None
+
+def consultar_mx_imss(curp):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM mexico_imss WHERE curp = ?', (curp,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'curp': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'telefono': r[4], 'direccion': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_mx_sat(rfc):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM mexico_sat WHERE rfc = ?', (rfc,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'rfc': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
+        return None
+    except:
+        return None
+
+def consultar_sv_dui(dui):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM salvador_dui WHERE dui = ?', (dui,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dui': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_hn_dni(dni):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM honduras_dni WHERE dni = ?', (dni,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dni': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_cl_rc(rut):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM chile_rc WHERE rut = ?', (rut,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'rut': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_cl_sii(rut):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM chile_sii WHERE rut = ?', (rut,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'rut': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
+        return None
+    except:
+        return None
+
+def consultar_br_cpf(cpf):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM brasil_cpf WHERE cpf = ?', (cpf,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'cpf': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
+
+def consultar_br_rf(cpf):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM brasil_rf WHERE cpf = ?', (cpf,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'cpf': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
+        return None
+    except:
+        return None
+
+def consultar_ec_cedula(cedula):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM ecuador_cedula WHERE cedula = ?', (cedula,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'cedula': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
+        return None
+    except:
+        return None
 
 # ==================== FUNCIONES DE RED ====================
 
@@ -274,6 +511,7 @@ def descubrir_subdominios(dominio):
 # ==================== SISTEMA DE TOKENS ====================
 
 user_tokens = {}
+
 def get_tokens(user_id):
     return user_tokens.get(str(user_id), 10)
 
@@ -320,7 +558,8 @@ async def arg_menu(update, context):
         f"/dnrpa <patente> - DNRPA (706K)\n"
         f"/email <email> - Filtraciones\n"
         f"/titular <tel> - Teléfono (100M)\n"
-        f"/url <dominio> - Credenciales\n\n"
+        f"/url <dominio> - Credenciales\n"
+        f"/ip <ip> - Geolocalización\n\n"
         f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
         parse_mode='Markdown'
     )
@@ -501,6 +740,7 @@ async def gt_dpi_command(update, context):
     msg += f"🆔 {data['dpi']}\n"
     msg += f"📅 {data['fecha_nac']}\n"
     msg += f"📍 {data['direccion']}\n"
+    msg += f"📱 {data['telefono']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -817,7 +1057,6 @@ async def saldo_command(update, context):
 async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
     
     if query.data == 'arg_menu':
         await arg_menu(update, context)
@@ -840,116 +1079,82 @@ async def button_handler(update, context):
             f"🔧 *RED Y SEGURIDAD*\n\n"
             f"/scan <URL/IP> - Puertos\n"
             f"/subdomain <URL> - Subdominios\n\n"
-            f"💰 *Tokens:* {get_tokens(user_id)}",
+            f"💰 *Tokens:* {get_tokens(query.from_user.id)}",
             parse_mode='Markdown'
         )
     elif query.data == 'tokens':
         await query.edit_message_text(
-            f"💰 *Tokens: {get_tokens(user_id)}*",
+            f"💰 *Tokens: {get_tokens(query.from_user.id)}*",
             parse_mode='Markdown'
         )
-
-# ==================== FUNCIONES DE CONSULTA PARA PAÍSES (MOCK DATA PARA DEMOSTRACIÓN) ====================
-
-# NOTA: Estas funciones son para demostración. Para usar datos reales,
-# reemplazar con conexiones a bases de datos reales.
-
-def consultar_gt_dpi(dpi):
-    return {'dpi': dpi, 'nombre': 'María', 'apellido': 'López', 'fecha_nac': '15/05/1990', 'direccion': 'Zona 10, Guatemala'}
-
-def consultar_gt_nit(nit):
-    return {'nit': nit, 'nombre': 'Empresa XYZ', 'direccion': 'Zona 10, Guatemala', 'telefono': '12345678'}
-
-def consultar_mx_imss(curp):
-    return {'curp': curp, 'nombre': 'Carlos', 'apellido': 'Gómez', 'fecha_nac': '20/10/1985', 'telefono': '5512345678', 'direccion': 'CDMX'}
-
-def consultar_mx_sat(rfc):
-    return {'rfc': rfc, 'nombre': 'Juan Pérez', 'direccion': 'CDMX', 'telefono': '5512345678'}
-
-def consultar_sv_dui(dui):
-    return {'dui': dui, 'nombre': 'Ana', 'apellido': 'Torres', 'fecha_nac': '10/03/1992', 'direccion': 'San Salvador', 'telefono': '76543210'}
-
-def consultar_hn_dni(dni):
-    return {'dni': dni, 'nombre': 'Pedro', 'apellido': 'Ramírez', 'fecha_nac': '25/12/1988', 'direccion': 'Tegucigalpa', 'telefono': '98765432'}
-
-def consultar_cl_rc(rut):
-    return {'rut': rut, 'nombre': 'Fernando', 'apellido': 'Rojas', 'fecha_nac': '05/07/1991', 'direccion': 'Santiago', 'telefono': '98765432'}
-
-def consultar_cl_sii(rut):
-    return {'rut': rut, 'nombre': 'Empresa Rojas Ltda', 'direccion': 'Santiago', 'telefono': '98765432'}
-
-def consultar_br_cpf(cpf):
-    return {'cpf': cpf, 'nombre': 'João', 'apellido': 'Silva', 'fecha_nac': '15/11/1987', 'direccion': 'São Paulo', 'telefono': '11987654321'}
-
-def consultar_br_rf(cpf):
-    return {'cpf': cpf, 'nombre': 'João Silva', 'direccion': 'São Paulo', 'telefono': '11987654321'}
-
-def consultar_ec_cedula(cedula):
-    return {'cedula': cedula, 'nombre': 'María', 'apellido': 'Peña', 'fecha_nac': '30/08/1993', 'direccion': 'Quito', 'telefono': '98765432'}
 
 # ==================== MAIN ====================
 
 def main():
-    init_db()
-    
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    app = Application.builder().token(base64.b64decode(TOKEN).decode()).build()
-    
-    # Argentina
-    app.add_handler(CommandHandler("dni", dni_command))
-    app.add_handler(CommandHandler("deuda", deuda_command))
-    app.add_handler(CommandHandler("dnrpa", dnrpa_command))
-    app.add_handler(CommandHandler("email", email_command))
-    app.add_handler(CommandHandler("titular", titular_command))
-    app.add_handler(CommandHandler("url", url_command))
-    app.add_handler(CommandHandler("ip", ip_command))
-    
-    # Guatemala
-    app.add_handler(CommandHandler("gt_dpi", gt_dpi_command))
-    app.add_handler(CommandHandler("gt_nit", gt_nit_command))
-    
-    # México
-    app.add_handler(CommandHandler("mx_imss", mx_imss_command))
-    app.add_handler(CommandHandler("mx_sat", mx_sat_command))
-    
-    # El Salvador
-    app.add_handler(CommandHandler("sv_dui", sv_dui_command))
-    
-    # Honduras
-    app.add_handler(CommandHandler("hn_dni", hn_dni_command))
-    
-    # Chile
-    app.add_handler(CommandHandler("cl_rc", cl_rc_command))
-    app.add_handler(CommandHandler("cl_sii", cl_sii_command))
-    
-    # Brasil
-    app.add_handler(CommandHandler("br_cpf", br_cpf_command))
-    app.add_handler(CommandHandler("br_rf", br_rf_command))
-    
-    # Ecuador
-    app.add_handler(CommandHandler("ec_cedula", ec_cedula_command))
-    
-    # Red
-    app.add_handler(CommandHandler("scan", scan_command))
-    app.add_handler(CommandHandler("subdomain", subdomain_command))
-    
-    # Generales
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("saldo", saldo_command))
-    
-    app.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🤖 NINJA DATA BOT v62.0 - DATOS REALES")
-    print("📊 RENAPER: 48M registros")
-    print("📊 DNRPA: 706K registros")
-    print("📊 BCRA: 32M registros")
-    print("📊 Teléfonos: 100M registros")
-    print("📊 8 países integrados")
-    print("🔐 Modo Fantasma: ACTIVADO")
-    print("🌐 Flask server: puerto 8080")
-    app.run_polling()
+    try:
+        print("🚀 Iniciando NINJA DATA BOT...")
+        init_db()
+        
+        # Iniciar Flask
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        print("🌐 Flask server iniciado en puerto 8080")
+        
+        # Iniciar Bot
+        app = Application.builder().token(base64.b64decode(TOKEN).decode()).build()
+        
+        # Argentina
+        app.add_handler(CommandHandler("dni", dni_command))
+        app.add_handler(CommandHandler("deuda", deuda_command))
+        app.add_handler(CommandHandler("dnrpa", dnrpa_command))
+        app.add_handler(CommandHandler("email", email_command))
+        app.add_handler(CommandHandler("titular", titular_command))
+        app.add_handler(CommandHandler("url", url_command))
+        app.add_handler(CommandHandler("ip", ip_command))
+        
+        # Guatemala
+        app.add_handler(CommandHandler("gt_dpi", gt_dpi_command))
+        app.add_handler(CommandHandler("gt_nit", gt_nit_command))
+        
+        # México
+        app.add_handler(CommandHandler("mx_imss", mx_imss_command))
+        app.add_handler(CommandHandler("mx_sat", mx_sat_command))
+        
+        # El Salvador
+        app.add_handler(CommandHandler("sv_dui", sv_dui_command))
+        
+        # Honduras
+        app.add_handler(CommandHandler("hn_dni", hn_dni_command))
+        
+        # Chile
+        app.add_handler(CommandHandler("cl_rc", cl_rc_command))
+        app.add_handler(CommandHandler("cl_sii", cl_sii_command))
+        
+        # Brasil
+        app.add_handler(CommandHandler("br_cpf", br_cpf_command))
+        app.add_handler(CommandHandler("br_rf", br_rf_command))
+        
+        # Ecuador
+        app.add_handler(CommandHandler("ec_cedula", ec_cedula_command))
+        
+        # Red
+        app.add_handler(CommandHandler("scan", scan_command))
+        app.add_handler(CommandHandler("subdomain", subdomain_command))
+        
+        # Generales
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("saldo", saldo_command))
+        
+        app.add_handler(CallbackQueryHandler(button_handler))
+        
+        print("✅ NINJA DATA BOT v62.0 - ACTIVO")
+        print("📊 8 países integrados")
+        print("🔐 Modo Fantasma: ACTIVADO")
+        
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO: {e}")
 
 if __name__ == '__main__':
     main()
