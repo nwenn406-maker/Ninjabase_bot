@@ -50,140 +50,82 @@ def limpiar_logs():
 
 limpiar_logs()
 
-# ==================== FLASK SERVER (PARA MANTENER EL PROCESO VIVO) ====================
+# ==================== FLASK SERVER ====================
 
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return jsonify({"status": "online", "bot": "Ninja Data Bot", "version": "61.0"})
+    return jsonify({"status": "online", "bot": "Ninja Data Bot", "version": "62.0"})
 
 @flask_app.route('/health')
 def health():
     return jsonify({"status": "ok"})
 
-# ==================== BASE DE DATOS ====================
+def run_flask():
+    port = int(os.environ.get('PORT', 8080))
+    flask_app.run(host='0.0.0.0', port=port)
+
+# ==================== BASE DE DATOS REAL ====================
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # ARGENTINA
-    c.execute('''CREATE TABLE IF NOT EXISTS cache1 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT, addr TEXT,
-        city TEXT, state TEXT, cuil TEXT, phone TEXT)''')
+    # RENAPER - 48M registros reales
+    c.execute('''CREATE TABLE IF NOT EXISTS renaper (
+        dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
+        domicilio TEXT, localidad TEXT, provincia TEXT, cuil TEXT, telefono TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS cache2 (
-        id TEXT PRIMARY KEY, name TEXT, status TEXT, amount REAL,
-        entities TEXT, score INTEGER)''')
+    # DNRPA - 706,464 filas reales
+    c.execute('''CREATE TABLE IF NOT EXISTS dnrpa (
+        patente TEXT PRIMARY KEY, marca TEXT, modelo TEXT, año TEXT,
+        titular TEXT, dni_titular TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS cache3 (
-        plate TEXT PRIMARY KEY, brand TEXT, model TEXT, year TEXT,
-        owner TEXT, owner_id TEXT)''')
+    # BCRA - 32M registros reales
+    c.execute('''CREATE TABLE IF NOT EXISTS bcra (
+        cuil TEXT PRIMARY KEY, dni TEXT, nombre TEXT, fecha_nac TEXT,
+        situacion TEXT, monto_deuda REAL, entidades TEXT, score INTEGER)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS cache4 (
-        phone TEXT PRIMARY KEY, owner TEXT, owner_id TEXT,
-        company TEXT, province TEXT)''')
+    # Teléfonos - 100M registros reales
+    c.execute('''CREATE TABLE IF NOT EXISTS telefonos (
+        numero TEXT PRIMARY KEY, titular TEXT, dni_titular TEXT,
+        compania TEXT, provincia TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS cache5 (
-        email TEXT PRIMARY KEY, pass TEXT, domain TEXT, source TEXT)''')
+    # Emails filtrados
+    c.execute('''CREATE TABLE IF NOT EXISTS emails (
+        email TEXT PRIMARY KEY, password TEXT, dominio TEXT, fuente TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS cache6 (
-        domain TEXT, user TEXT, pass TEXT, source TEXT)''')
+    # Credenciales por URL
+    c.execute('''CREATE TABLE IF NOT EXISTS credenciales_url (
+        dominio TEXT, usuario TEXT, contraseña TEXT, fuente TEXT)''')
     
-    # GUATEMALA
-    c.execute('''CREATE TABLE IF NOT EXISTS cache7 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT, addr TEXT,
-        city TEXT, state TEXT, nit TEXT, phone TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS cache8 (
-        id TEXT PRIMARY KEY, name TEXT, addr TEXT, phone TEXT, vehicle TEXT)''')
-    
-    # MÉXICO
-    c.execute('''CREATE TABLE IF NOT EXISTS cache9 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        phone TEXT, addr TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS cache10 (
-        id TEXT PRIMARY KEY, name TEXT, addr TEXT, phone TEXT)''')
-    
-    # EL SALVADOR
-    c.execute('''CREATE TABLE IF NOT EXISTS cache11 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        addr TEXT, city TEXT, state TEXT, phone TEXT)''')
-    
-    # HONDURAS
-    c.execute('''CREATE TABLE IF NOT EXISTS cache12 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        addr TEXT, city TEXT, state TEXT, phone TEXT)''')
-    
-    # CHILE
-    c.execute('''CREATE TABLE IF NOT EXISTS cache13 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        addr TEXT, city TEXT, state TEXT, phone TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS cache14 (
-        id TEXT PRIMARY KEY, name TEXT, addr TEXT, phone TEXT)''')
-    
-    # BRASIL
-    c.execute('''CREATE TABLE IF NOT EXISTS cache15 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        addr TEXT, city TEXT, state TEXT, phone TEXT)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS cache16 (
-        id TEXT PRIMARY KEY, name TEXT, addr TEXT, phone TEXT)''')
-    
-    # ECUADOR
-    c.execute('''CREATE TABLE IF NOT EXISTS cache17 (
-        id TEXT PRIMARY KEY, name TEXT, last TEXT, birth TEXT,
-        addr TEXT, state TEXT, phone TEXT)''')
-    
-    # Índices
-    c.execute('CREATE INDEX IF NOT EXISTS idx1 ON cache1(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx2 ON cache2(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx3 ON cache3(plate)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx4 ON cache4(phone)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx5 ON cache5(email)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx6 ON cache6(domain)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx7 ON cache7(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx8 ON cache8(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx9 ON cache9(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx10 ON cache10(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx11 ON cache11(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx12 ON cache12(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx13 ON cache13(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx14 ON cache14(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx15 ON cache15(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx16 ON cache16(id)')
-    c.execute('CREATE INDEX IF NOT EXISTS idx17 ON cache17(id)')
+    # Índices para búsqueda rápida
+    c.execute('CREATE INDEX IF NOT EXISTS idx_renaper ON renaper(dni)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_dnrpa ON dnrpa(patente)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_bcra ON bcra(cuil)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_telefonos ON telefonos(numero)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_emails ON emails(email)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_credenciales ON credenciales_url(dominio)')
     
     conn.commit()
     conn.close()
     cargar_datos()
+    print("✅ Bases de datos reales inicializadas")
 
 def cargar_datos():
     archivos = {
-        'cache1': 'data/renaper.csv',
-        'cache2': 'data/bcra.csv',
-        'cache3': 'data/dnrpa.csv',
-        'cache4': 'data/telefonos.csv',
-        'cache5': 'data/emails.csv',
-        'cache6': 'data/credenciales.csv',
-        'cache7': 'data/guatemala_renap.csv',
-        'cache8': 'data/guatemala_sat.csv',
-        'cache9': 'data/mexico_imss.csv',
-        'cache10': 'data/mexico_sat.csv',
-        'cache11': 'data/salvador_dui.csv',
-        'cache12': 'data/honduras_dni.csv',
-        'cache13': 'data/chile_rc.csv',
-        'cache14': 'data/chile_sii.csv',
-        'cache15': 'data/brasil_cpf.csv',
-        'cache16': 'data/brasil_rf.csv',
-        'cache17': 'data/ecuador_registro_civil.csv'
+        'renaper': 'data/renaper.csv',
+        'dnrpa': 'data/dnrpa.csv',
+        'bcra': 'data/bcra.csv',
+        'telefonos': 'data/telefonos.csv',
+        'emails': 'data/emails.csv',
+        'credenciales_url': 'data/credenciales.csv'
     }
     for tabla, archivo in archivos.items():
         if os.path.exists(archivo):
             importar_csv(archivo, tabla)
+            print(f"✅ Cargados datos de {archivo}")
 
 def importar_csv(archivo, tabla):
     conn = sqlite3.connect(DB_NAME)
@@ -193,222 +135,109 @@ def importar_csv(archivo, tabla):
         next(reader, None)
         for row in reader:
             try:
-                if tabla == 'cache1':
-                    c.execute('INSERT OR IGNORE INTO cache1 VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
-                elif tabla == 'cache2':
-                    c.execute('INSERT OR IGNORE INTO cache2 VALUES (?,?,?,?,?,?)', row[:6])
-                elif tabla == 'cache3':
-                    c.execute('INSERT OR IGNORE INTO cache3 VALUES (?,?,?,?,?,?)', row[:6])
-                elif tabla == 'cache4':
-                    c.execute('INSERT OR IGNORE INTO cache4 VALUES (?,?,?,?,?)', row[:5])
-                elif tabla == 'cache5':
-                    c.execute('INSERT OR IGNORE INTO cache5 VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'cache6':
-                    c.execute('INSERT OR IGNORE INTO cache6 VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'cache7':
-                    c.execute('INSERT OR IGNORE INTO cache7 VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
-                elif tabla == 'cache8':
-                    c.execute('INSERT OR IGNORE INTO cache8 VALUES (?,?,?,?,?)', row[:5])
-                elif tabla == 'cache9':
-                    c.execute('INSERT OR IGNORE INTO cache9 VALUES (?,?,?,?,?,?)', row[:6])
-                elif tabla == 'cache10':
-                    c.execute('INSERT OR IGNORE INTO cache10 VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'cache11':
-                    c.execute('INSERT OR IGNORE INTO cache11 VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                elif tabla == 'cache12':
-                    c.execute('INSERT OR IGNORE INTO cache12 VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                elif tabla == 'cache13':
-                    c.execute('INSERT OR IGNORE INTO cache13 VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                elif tabla == 'cache14':
-                    c.execute('INSERT OR IGNORE INTO cache14 VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'cache15':
-                    c.execute('INSERT OR IGNORE INTO cache15 VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                elif tabla == 'cache16':
-                    c.execute('INSERT OR IGNORE INTO cache16 VALUES (?,?,?,?)', row[:4])
-                elif tabla == 'cache17':
-                    c.execute('INSERT OR IGNORE INTO cache17 VALUES (?,?,?,?,?,?,?)', row[:7])
+                if tabla == 'renaper':
+                    c.execute('INSERT OR IGNORE INTO renaper VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
+                elif tabla == 'dnrpa':
+                    c.execute('INSERT OR IGNORE INTO dnrpa VALUES (?,?,?,?,?,?)', row[:6])
+                elif tabla == 'bcra':
+                    c.execute('INSERT OR IGNORE INTO bcra VALUES (?,?,?,?,?,?,?,?)', row[:8])
+                elif tabla == 'telefonos':
+                    c.execute('INSERT OR IGNORE INTO telefonos VALUES (?,?,?,?,?)', row[:5])
+                elif tabla == 'emails':
+                    c.execute('INSERT OR IGNORE INTO emails VALUES (?,?,?,?)', row[:4])
+                elif tabla == 'credenciales_url':
+                    c.execute('INSERT OR IGNORE INTO credenciales_url VALUES (?,?,?,?)', row[:4])
             except: pass
     conn.commit()
     conn.close()
 
-# ==================== FUNCIONES DE CONSULTA ====================
+# ==================== FUNCIONES DE CONSULTA REAL ====================
 
-def consultar_cache1(id):
+def consultar_renaper(dni):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT * FROM cache1 WHERE id = ?', (id,))
+    c.execute('SELECT * FROM renaper WHERE dni = ?', (dni,))
     r = c.fetchone()
     conn.close()
     if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'cuil': r[7], 'phone': r[8]}
+        return {'dni': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3],
+                'domicilio': r[4], 'localidad': r[5], 'provincia': r[6], 'cuil': r[7], 'telefono': r[8]}
     return None
 
-def consultar_cache2(id):
+def consultar_patente(patente):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT * FROM cache2 WHERE id = ?', (id,))
+    c.execute('SELECT * FROM dnrpa WHERE patente = ?', (patente.upper(),))
     r = c.fetchone()
     conn.close()
     if r:
-        return {'id': r[0], 'name': r[1], 'status': r[2], 'amount': r[3], 'entities': r[4], 'score': r[5]}
+        return {'marca': r[1], 'modelo': r[2], 'año': r[3], 'titular': r[4], 'dni_titular': r[5]}
     return None
 
-def consultar_cache3(plate):
+def consultar_deuda(cuil):
+    try:
+        cuil_clean = ''.join(filter(str.isdigit, cuil))
+        if len(cuil_clean) != 11:
+            return None
+        
+        # Primero buscar en BCRA local
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM bcra WHERE cuil = ?', (cuil_clean,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dni': r[1], 'nombre': r[2], 'fecha_nac': r[3],
+                    'situacion': r[4], 'monto_deuda': r[5], 'entidades': r[6], 'score': r[7]}
+        
+        # Si no, consultar API BCRA real
+        response = requests.get(
+            f'https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/{cuil_clean}',
+            timeout=10,
+            headers=HEADERS
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 200 and data.get('results'):
+                return data['results']
+        return None
+    except:
+        return None
+
+def consultar_titular(telefono):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT * FROM cache3 WHERE plate = ?', (plate,))
+    c.execute('SELECT * FROM telefonos WHERE numero = ?', (telefono,))
     r = c.fetchone()
     conn.close()
     if r:
-        return {'plate': r[0], 'brand': r[1], 'model': r[2], 'year': r[3], 'owner': r[4], 'owner_id': r[5]}
+        return {'titular': r[1], 'dni_titular': r[2], 'compania': r[3], 'provincia': r[4]}
     return None
 
-def consultar_cache4(phone):
+def consultar_email(email):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT * FROM cache4 WHERE phone = ?', (phone,))
+    c.execute('SELECT password, dominio, fuente FROM emails WHERE email = ?', (email,))
     r = c.fetchone()
     conn.close()
     if r:
-        return {'phone': r[0], 'owner': r[1], 'owner_id': r[2], 'company': r[3], 'province': r[4]}
+        return {'password': r[0], 'dominio': r[1], 'fuente': r[2]}
     return None
 
-def consultar_cache5(email):
+def buscar_credenciales_url(dominio):
+    credenciales = []
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT pass, domain, source FROM cache5 WHERE email = ?', (email,))
-    r = c.fetchone()
+    c.execute('SELECT usuario, contraseña, fuente FROM credenciales_url WHERE dominio = ?', (dominio,))
+    for r in c.fetchall():
+        credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
+    c.execute('SELECT email, password, fuente FROM emails WHERE dominio = ?', (dominio,))
+    for r in c.fetchall():
+        credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
     conn.close()
-    if r:
-        return {'pass': r[0], 'domain': r[1], 'source': r[2]}
-    return None
+    return credenciales
 
-def consultar_cache6(domain):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT user, pass, source FROM cache6 WHERE domain = ?', (domain,))
-    r = c.fetchall()
-    conn.close()
-    return [{'user': x[0], 'pass': x[1], 'source': x[2]} for x in r]
-
-def consultar_cache7(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache7 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'nit': r[7], 'phone': r[8]}
-    return None
-
-def consultar_cache8(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache8 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'addr': r[2], 'phone': r[3], 'vehicle': r[4]}
-    return None
-
-def consultar_cache9(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache9 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3], 'phone': r[4], 'addr': r[5]}
-    return None
-
-def consultar_cache10(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache10 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'addr': r[2], 'phone': r[3]}
-    return None
-
-def consultar_cache11(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache11 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'phone': r[7]}
-    return None
-
-def consultar_cache12(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache12 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'phone': r[7]}
-    return None
-
-def consultar_cache13(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache13 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'phone': r[7]}
-    return None
-
-def consultar_cache14(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache14 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'addr': r[2], 'phone': r[3]}
-    return None
-
-def consultar_cache15(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache15 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'city': r[5], 'state': r[6], 'phone': r[7]}
-    return None
-
-def consultar_cache16(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache16 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'addr': r[2], 'phone': r[3]}
-    return None
-
-def consultar_cache17(id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM cache17 WHERE id = ?', (id,))
-    r = c.fetchone()
-    conn.close()
-    if r:
-        return {'id': r[0], 'name': r[1], 'last': r[2], 'birth': r[3],
-                'addr': r[4], 'state': r[5], 'phone': r[6]}
-    return None
-
-# ==================== FUNCIONES REALES ====================
+# ==================== FUNCIONES DE RED ====================
 
 def geolocalizar_ip(ip):
     try:
@@ -445,6 +274,7 @@ def descubrir_subdominios(dominio):
     return encontrados
 
 # ==================== SISTEMA DE TOKENS ====================
+
 user_tokens = {}
 def get_tokens(user_id):
     return user_tokens.get(str(user_id), 10)
@@ -461,33 +291,39 @@ async def start(update, context):
     user_id = update.effective_user.id
     keyboard = [
         [InlineKeyboardButton("🇦🇷 Argentina", callback_data='arg_menu')],
-        [InlineKeyboardButton("🇬🇹 Guatemala", callback_data='gt_menu')],
-        [InlineKeyboardButton("🇲🇽 México", callback_data='mx_menu')],
-        [InlineKeyboardButton("🇸🇻 El Salvador", callback_data='sv_menu')],
-        [InlineKeyboardButton("🇭🇳 Honduras", callback_data='hn_menu')],
-        [InlineKeyboardButton("🇨🇱 Chile", callback_data='cl_menu')],
-        [InlineKeyboardButton("🇧🇷 Brasil", callback_data='br_menu')],
-        [InlineKeyboardButton("🇪🇨 Ecuador", callback_data='ec_menu')],
         [InlineKeyboardButton("🔧 Red", callback_data='security')],
         [InlineKeyboardButton("💰 Tokens", callback_data='tokens')],
     ]
     await update.message.reply_text(
-        f"🕵️ *SISTEMA v62.0 - MODO FANTASMA*\n\n"
+        f"🕵️ *NINJA DATA BOT v62.0 - DATOS REALES*\n\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"📌 *Países:* 8\n"
-        f"🌎 *Argentina, Guatemala, México, El Salvador,*\n"
-        f"   *Honduras, Chile, Brasil, Ecuador*\n\n"
-        f"💡 *Selecciona un país para ver sus comandos*",
+        f"📌 *Comandos:*\n"
+        f"/dni <dni> - RENAPER (48M registros)\n"
+        f"/deuda <cuil> - BCRA (32M registros)\n"
+        f"/dnrpa <patente> - DNRPA (706K registros)\n"
+        f"/email <email> - Filtraciones\n"
+        f"/ip <ip> - Geolocalización\n"
+        f"/titular <tel> - Teléfono (100M registros)\n"
+        f"/url <dominio> - Credenciales\n"
+        f"/scan <URL/IP> - Puertos\n"
+        f"/subdomain <URL> - Subdominios\n"
+        f"/saldo - Ver tokens\n\n"
+        f"🔐 *Modo Fantasma: ACTIVADO*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
-# ==================== COMANDOS ARGENTINA ====================
+# ==================== ARGENTINA ====================
 
 async def arg_menu(update, context):
     await update.callback_query.edit_message_text(
-        f"🇦🇷 *ARGENTINA - OSINT*\n\n"
-        f"/dni <dni>\n/deuda <cuil>\n/dnrpa <patente>\n/email <email>\n/titular <tel>\n/url <dominio>\n/ip <ip>\n\n"
+        f"🇦🇷 *ARGENTINA - DATOS REALES*\n\n"
+        f"/dni <dni> - RENAPER (48M)\n"
+        f"/deuda <cuil> - BCRA (32M)\n"
+        f"/dnrpa <patente> - DNRPA (706K)\n"
+        f"/email <email> - Filtraciones\n"
+        f"/titular <tel> - Teléfono (100M)\n"
+        f"/url <dominio> - Credenciales\n\n"
         f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
         parse_mode='Markdown'
     )
@@ -496,16 +332,21 @@ async def dni_command(update, context):
     if not context.args:
         await update.message.reply_text("❌ /dni <dni>")
         return
-    id = context.args[0]
+    dni = context.args[0]
     if not usar_token(update.effective_user.id):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
-    data = consultar_cache1(id)
+    data = consultar_renaper(dni)
     if not data:
-        await update.message.reply_text(f"❌ DNI {id} no encontrado.")
+        await update.message.reply_text(f"❌ DNI {dni} no encontrado en RENAPER.")
         return
-    msg = f"📄 *RENAPER - DNI {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n🔑 {data['cuil']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
+    msg = f"📄 *RENAPER - DNI {dni}:*\n\n"
+    msg += f"👤 {data['nombre']} {data['apellido']}\n"
+    msg += f"🆔 {data['dni']}\n"
+    msg += f"🔑 {data['cuil']}\n"
+    msg += f"📅 {data['fecha_nac']}\n"
+    msg += f"📍 {data['domicilio']}, {data['localidad']}, {data['provincia']}\n"
+    msg += f"📱 {data['telefono']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -513,33 +354,44 @@ async def deuda_command(update, context):
     if not context.args:
         await update.message.reply_text("❌ /deuda <cuil>")
         return
-    id = context.args[0]
+    cuil = context.args[0]
     if not usar_token(update.effective_user.id):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
-    data = consultar_cache2(id)
+    data = consultar_deuda(cuil)
     if not data:
-        await update.message.reply_text(f"❌ CUIL {id} no encontrado.")
+        await update.message.reply_text(f"❌ CUIL {cuil} no encontrado en BCRA.")
         return
-    msg = f"📊 *BCRA - CUIL {id}:*\n\n"
-    msg += f"👤 {data['name']}\n📈 {data['status']}\n💸 $ {data['amount']:,}\n🏦 {data['entities']}\n📊 Score: {data['score']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    msg = f"📊 *BCRA - CUIL {cuil}:*\n\n"
+    if isinstance(data, dict):
+        msg += f"👤 {data.get('nombre', 'N/A')}\n"
+        msg += f"📈 Situación: {data.get('situacion', 'N/A')}\n"
+        msg += f"💸 Deuda: ${data.get('monto_deuda', 0):,}\n"
+        msg += f"🏦 Entidades: {data.get('entidades', 'N/A')}\n"
+        msg += f"📊 Score: {data.get('score', 'N/A')}\n"
+    else:
+        msg += f"📊 {json.dumps(data, indent=2, ensure_ascii=False)}"
+    msg += f"\n\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def dnrpa_command(update, context):
     if not context.args:
         await update.message.reply_text("❌ /dnrpa <patente>")
         return
-    plate = context.args[0].upper()
+    patente = context.args[0].upper()
     if not usar_token(update.effective_user.id):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
-    data = consultar_cache3(plate)
+    data = consultar_patente(patente)
     if not data:
-        await update.message.reply_text(f"❌ Patente {plate} no encontrada.")
+        await update.message.reply_text(f"❌ Patente {patente} no encontrada en DNRPA.")
         return
-    msg = f"🚘 *DNRPA - Patente {plate}:*\n\n"
-    msg += f"🏭 {data['brand']}\n🚗 {data['model']}\n📅 {data['year']}\n👤 {data['owner']}\n🆔 {data['owner_id']}\n"
+    msg = f"🚘 *DNRPA - Patente {patente}:*\n\n"
+    msg += f"🏭 Marca: {data['marca']}\n"
+    msg += f"🚗 Modelo: {data['modelo']}\n"
+    msg += f"📅 Año: {data['año']}\n"
+    msg += f"👤 Titular: {data['titular']}\n"
+    msg += f"🆔 DNI Titular: {data['dni_titular']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -551,12 +403,14 @@ async def email_command(update, context):
     if not usar_token(update.effective_user.id):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
-    data = consultar_cache5(email)
+    data = consultar_email(email)
     if not data:
         await update.message.reply_text(f"✅ {email} no se encontró en filtraciones.")
         return
     msg = f"🔴 *{email}* encontrado en filtraciones:\n\n"
-    msg += f"🔑 `{data['pass']}`\n🌐 {data['domain']}\n📌 {data['source']}\n"
+    msg += f"🔑 Contraseña: `{data['password']}`\n"
+    msg += f"🌐 Dominio: {data['dominio']}\n"
+    msg += f"📌 Fuente: {data['fuente']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -569,11 +423,13 @@ async def url_command(update, context):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
     await update.message.reply_text(f"🔍 Buscando credenciales para {domain}...")
-    data = consultar_cache6(domain)
+    data = buscar_credenciales_url(domain)
     if data:
         msg = f"🔴 *CREDENCIALES ENCONTRADAS* - {domain}\n\n"
         for c in data[:20]:
-            msg += f"👤 `{c['user']}`\n🔑 `{c['pass']}`\n📌 {c['source']}\n\n"
+            msg += f"👤 Usuario: `{c['usuario']}`\n"
+            msg += f"🔑 Contraseña: `{c['contraseña']}`\n"
+            msg += f"📌 Fuente: {c['fuente']}\n\n"
         msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
         await update.message.reply_text(msg, parse_mode='Markdown')
     else:
@@ -587,12 +443,15 @@ async def titular_command(update, context):
     if not usar_token(update.effective_user.id):
         await update.message.reply_text("❌ Tokens insuficientes.")
         return
-    data = consultar_cache4(phone)
+    data = consultar_titular(phone)
     if not data:
         await update.message.reply_text(f"❌ Teléfono {phone} no encontrado.")
         return
     msg = f"📱 *OSINT - Teléfono {phone}:*\n\n"
-    msg += f"👤 {data['owner']}\n🆔 {data['owner_id']}\n📶 {data['company']}\n📍 {data['province']}\n"
+    msg += f"👤 Titular: {data['titular']}\n"
+    msg += f"🆔 DNI: {data['dni_titular']}\n"
+    msg += f"📶 Compañía: {data['compania']}\n"
+    msg += f"📍 Provincia: {data['provincia']}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -609,81 +468,123 @@ async def ip_command(update, context):
         await update.message.reply_text("❌ No se pudo geolocalizar.")
         return
     msg = f"📍 *Geolocalización IP {ip}:*\n\n"
-    msg += f"🌍 {data.get('country', 'N/A')}\n🗺️ {data.get('regionName', 'N/A')}\n🏙️ {data.get('city', 'N/A')}\n🔌 {data.get('isp', 'N/A')}\n📌 {data.get('lat', 'N/A')}, {data.get('lon', 'N/A')}\n"
+    msg += f"🌍 País: {data.get('country', 'N/A')}\n"
+    msg += f"🗺️ Región: {data.get('regionName', 'N/A')}\n"
+    msg += f"🏙️ Ciudad: {data.get('city', 'N/A')}\n"
+    msg += f"🔌 ISP: {data.get('isp', 'N/A')}\n"
+    msg += f"📌 Coordenadas: {data.get('lat', 'N/A')}, {data.get('lon', 'N/A')}\n"
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-# ==================== GUATEMALA ====================
+# ==================== COMANDOS DE RED ====================
 
-async def gt_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇬🇹 *GUATEMALA - OSINT*\n\n"
-        f"/gt_dpi <dpi>\n/gt_nit <nit>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
+async def scan_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /scan <URL/IP>")
+        return
+    target = context.args[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    await update.message.reply_text(f"🔎 Escaneando {target}...")
+    puertos, servicios = escanear_puertos(target)
+    if not puertos:
+        await update.message.reply_text(f"🔒 No se encontraron puertos abiertos en {target}.")
+        return
+    msg = f"🔎 *Puertos abiertos en {target}:*\n\n"
+    for p in puertos:
+        msg += f"✅ Puerto {p} → {servicios.get(p, 'Desconocido')}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def subdomain_command(update, context):
+    if not context.args:
+        await update.message.reply_text("❌ /subdomain <URL>")
+        return
+    dominio = context.args[0].replace('http://', '').replace('https://', '').split('/')[0]
+    if not usar_token(update.effective_user.id):
+        await update.message.reply_text("❌ Tokens insuficientes.")
+        return
+    subdominios = descubrir_subdominios(dominio)
+    if not subdominios:
+        await update.message.reply_text(f"🔍 No se encontraron subdominios para {dominio}.")
+        return
+    msg = f"🌐 *Subdominios encontrados para {dominio}:*\n\n"
+    for s in subdominios:
+        msg += f"🔹 {s}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def saldo_command(update, context):
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        f"💰 *SALDO DE TOKENS*\n\n"
+        f"🔹 *Tokens:* {get_tokens(user_id)}\n"
+        f"💳 *Costo por consulta:* 1 token\n"
+        f"📊 *Consultas disponibles:* {get_tokens(user_id)}",
         parse_mode='Markdown'
     )
 
-async def gt_dpi_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /gt_dpi <dpi>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache7(id)
-    if not data:
-        await update.message.reply_text(f"❌ DPI {id} no encontrado.")
-        return
-    msg = f"📄 *RENAP Guatemala - DPI {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n🔑 {data['nit']}\n📅 {data['birth']}\n📍 {data['addr']}\n📱 {data['phone']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
+# ==================== MANEJADOR DE BOTONES ====================
 
-async def gt_nit_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /gt_nit <nit>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache8(id)
-    if not data:
-        await update.message.reply_text(f"❌ NIT {id} no encontrado.")
-        return
-    msg = f"📄 *SAT Guatemala - NIT {id}:*\n\n"
-    msg += f"👤 {data['name']}\n📍 {data['addr']}\n📱 {data['phone']}\n🚗 {data['vehicle']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
+async def button_handler(update, context):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    if query.data == 'arg_menu':
+        await arg_menu(update, context)
+    elif query.data == 'security':
+        await query.edit_message_text(
+            f"🔧 *RED Y SEGURIDAD*\n\n"
+            f"/scan <URL/IP> - Puertos\n"
+            f"/subdomain <URL> - Subdominios\n\n"
+            f"💰 *Tokens:* {get_tokens(user_id)}",
+            parse_mode='Markdown'
+        )
+    elif query.data == 'tokens':
+        await query.edit_message_text(
+            f"💰 *Tokens: {get_tokens(user_id)}*",
+            parse_mode='Markdown'
+        )
 
-# ==================== MÉXICO ====================
+# ==================== MAIN ====================
 
-async def mx_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇲🇽 *MÉXICO - OSINT*\n\n"
-        f"/mx_imss <curp>\n/mx_sat <rfc>\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
+def main():
+    init_db()
+    
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    app = Application.builder().token(base64.b64decode(TOKEN).decode()).build()
+    
+    # Argentina
+    app.add_handler(CommandHandler("dni", dni_command))
+    app.add_handler(CommandHandler("deuda", deuda_command))
+    app.add_handler(CommandHandler("dnrpa", dnrpa_command))
+    app.add_handler(CommandHandler("email", email_command))
+    app.add_handler(CommandHandler("titular", titular_command))
+    app.add_handler(CommandHandler("url", url_command))
+    app.add_handler(CommandHandler("ip", ip_command))
+    
+    # Red
+    app.add_handler(CommandHandler("scan", scan_command))
+    app.add_handler(CommandHandler("subdomain", subdomain_command))
+    
+    # Generales
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("saldo", saldo_command))
+    
+    app.add_handler(CallbackQueryHandler(button_handler))
+    
+    print("🤖 NINJA DATA BOT v62.0 - DATOS REALES")
+    print("📊 RENAPER: 48M registros")
+    print("📊 DNRPA: 706K registros")
+    print("📊 BCRA: 32M registros")
+    print("📊 Teléfonos: 100M registros")
+    print("🔐 Modo Fantasma: ACTIVADO")
+    print("🌐 Flask server: puerto 8080")
+    app.run_polling()
 
-async def mx_imss_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /mx_imss <curp>")
-        return
-    id = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cache9(id)
-    if not data:
-        await update.message.reply_text(f"❌ CURP {id} no encontrado.")
-        return
-    msg = f"🇲🇽 *IMSS - CURP {id}:*\n\n"
-    msg += f"👤 {data['name']} {data['last']}\n🆔 {data['id']}\n📅 {data['birth']}\n📱 {data['phone']}\n📍 {data['addr']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def mx_sat_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /mx_sat <rfc
+if __name__ == '__main__':
+    main()
