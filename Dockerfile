@@ -9,10 +9,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-# Crear carpetas necesarias
-RUN mkdir -p data databases
+# ✅ SOLUCIÓN: Usar mkdir -p (ya lo tienes) pero con bandera -p
+# ✅ CORRECCIÓN: Asegurar que no falle si existe
+RUN mkdir -p data databases || true
 
-# Exponer puerto para Fly.io
 EXPOSE 8080
 
 CMD ["python", "app.py"]
