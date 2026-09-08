@@ -1,54 +1,23 @@
 import os
 import logging
-import random
-import requests
 import sqlite3
-import socket
-import csv
-import io
-import zipfile
-import json
 import base64
-import time
-import hashlib
 import threading
-from datetime import datetime
 from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ==================== MODO FANTASMA ====================
+# ==================== CONFIGURACIÓN ====================
 
-os.environ['PYTHONHASHSEED'] = '0'
-logging.basicConfig(level=logging.CRITICAL)
-logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
-logging.getLogger('telegram').setLevel(logging.CRITICAL)
-logging.getLogger('httpx').setLevel(logging.CRITICAL)
-logging.getLogger('sqlite3').setLevel(logging.CRITICAL)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 TOKEN_RAW = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN_RAW:
     raise ValueError("❌ TELEGRAM_TOKEN no configurado")
 TOKEN = base64.b64encode(TOKEN_RAW.encode()).decode()
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-}
-
 DB_NAME = "system_cache.db"
-
-def limpiar_logs():
-    try:
-        if os.path.exists('nohup.out'): os.remove('nohup.out')
-        if os.path.exists('logs.txt'): os.remove('logs.txt')
-        if os.path.exists('bot.log'): os.remove('bot.log')
-    except: pass
-
-limpiar_logs()
 
 # ==================== FLASK SERVER ====================
 
@@ -73,35 +42,31 @@ def init_db():
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         
-        # ARGENTINA - RENAPER (48M registros)
+        # CREAR TABLAS PARA 8 PAÍSES
+        # Argentina
         c.execute('''CREATE TABLE IF NOT EXISTS renaper (
             dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             domicilio TEXT, localidad TEXT, provincia TEXT, cuil TEXT, telefono TEXT)''')
         
-        # ARGENTINA - DNRPA (706K registros)
         c.execute('''CREATE TABLE IF NOT EXISTS dnrpa (
             patente TEXT PRIMARY KEY, marca TEXT, modelo TEXT, año TEXT,
             titular TEXT, dni_titular TEXT)''')
         
-        # ARGENTINA - BCRA (32M registros)
         c.execute('''CREATE TABLE IF NOT EXISTS bcra (
             cuil TEXT PRIMARY KEY, dni TEXT, nombre TEXT, fecha_nac TEXT,
             situacion TEXT, monto_deuda REAL, entidades TEXT, score INTEGER)''')
         
-        # ARGENTINA - Teléfonos (100M registros)
         c.execute('''CREATE TABLE IF NOT EXISTS telefonos (
             numero TEXT PRIMARY KEY, titular TEXT, dni_titular TEXT,
             compania TEXT, provincia TEXT)''')
         
-        # Filtraciones de emails
         c.execute('''CREATE TABLE IF NOT EXISTS emails (
             email TEXT PRIMARY KEY, password TEXT, dominio TEXT, fuente TEXT)''')
         
-        # Credenciales por URL
         c.execute('''CREATE TABLE IF NOT EXISTS credenciales_url (
             dominio TEXT, usuario TEXT, contraseña TEXT, fuente TEXT)''')
         
-        # GUATEMALA
+        # Guatemala
         c.execute('''CREATE TABLE IF NOT EXISTS guatemala_renap (
             dpi TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
@@ -109,7 +74,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS guatemala_sat (
             nit TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
         
-        # MÉXICO
+        # México
         c.execute('''CREATE TABLE IF NOT EXISTS mexico_imss (
             curp TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             telefono TEXT, direccion TEXT)''')
@@ -117,17 +82,17 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS mexico_sat (
             rfc TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
         
-        # EL SALVADOR
+        # El Salvador
         c.execute('''CREATE TABLE IF NOT EXISTS salvador_dui (
             dui TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
         
-        # HONDURAS
+        # Honduras
         c.execute('''CREATE TABLE IF NOT EXISTS honduras_dni (
             dni TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
         
-        # CHILE
+        # Chile
         c.execute('''CREATE TABLE IF NOT EXISTS chile_rc (
             rut TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
@@ -135,7 +100,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS chile_sii (
             rut TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
         
-        # BRASIL
+        # Brasil
         c.execute('''CREATE TABLE IF NOT EXISTS brasil_cpf (
             cpf TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
@@ -143,7 +108,7 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS brasil_rf (
             cpf TEXT PRIMARY KEY, nombre TEXT, direccion TEXT, telefono TEXT)''')
         
-        # ECUADOR
+        # Ecuador
         c.execute('''CREATE TABLE IF NOT EXISTS ecuador_cedula (
             cedula TEXT PRIMARY KEY, nombre TEXT, apellido TEXT, fecha_nac TEXT,
             direccion TEXT, telefono TEXT)''')
@@ -154,89 +119,64 @@ def init_db():
         c.execute('CREATE INDEX IF NOT EXISTS idx_bcra ON bcra(cuil)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_telefonos ON telefonos(numero)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_emails ON emails(email)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_credenciales ON credenciales_url(dominio)')
         
         conn.commit()
         conn.close()
-        cargar_datos()
+        
+        cargar_bases_reales()
         print("✅ Bases de datos inicializadas")
     except Exception as e:
-        print(f"❌ Error en base de datos: {e}")
+        print(f"❌ Error: {e}")
 
-def cargar_datos():
+def cargar_bases_reales():
+    bases_dir = "databases"
+    if not os.path.exists(bases_dir):
+        os.makedirs(bases_dir)
+        print("📁 Carpeta databases/ creada")
+        return
+    
     archivos = {
-        'renaper': 'data/renaper.csv',
-        'dnrpa': 'data/dnrpa.csv',
-        'bcra': 'data/bcra.csv',
-        'telefonos': 'data/telefonos.csv',
-        'emails': 'data/emails.csv',
-        'credenciales_url': 'data/credenciales.csv',
-        'guatemala_renap': 'data/guatemala_renap.csv',
-        'guatemala_sat': 'data/guatemala_sat.csv',
-        'mexico_imss': 'data/mexico_imss.csv',
-        'mexico_sat': 'data/mexico_sat.csv',
-        'salvador_dui': 'data/salvador_dui.csv',
-        'honduras_dni': 'data/honduras_dni.csv',
-        'chile_rc': 'data/chile_rc.csv',
-        'chile_sii': 'data/chile_sii.csv',
-        'brasil_cpf': 'data/brasil_cpf.csv',
-        'brasil_rf': 'data/brasil_rf.csv',
-        'ecuador_cedula': 'data/ecuador_cedula.csv'
+        'renaper': 'renaper.db',
+        'dnrpa': 'dnrpa.db',
+        'bcra': 'bcra.db',
+        'telefonos': 'telefonos.db',
+        'emails': 'emails.db',
+        'credenciales_url': 'credenciales.db',
+        'guatemala_renap': 'guatemala_renap.db',
+        'guatemala_sat': 'guatemala_sat.db',
+        'mexico_imss': 'mexico_imss.db',
+        'mexico_sat': 'mexico_sat.db',
+        'salvador_dui': 'salvador_dui.db',
+        'honduras_dni': 'honduras_dni.db',
+        'chile_rc': 'chile_rc.db',
+        'chile_sii': 'chile_sii.db',
+        'brasil_cpf': 'brasil_cpf.db',
+        'brasil_rf': 'brasil_rf.db',
+        'ecuador_cedula': 'ecuador_cedula.db'
     }
+    
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
     for tabla, archivo in archivos.items():
-        if os.path.exists(archivo):
-            importar_csv(archivo, tabla)
-
-def importar_csv(archivo, tabla):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        with open(archivo, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            next(reader, None)
-            for row in reader:
-                try:
-                    if tabla == 'renaper':
-                        c.execute('INSERT OR IGNORE INTO renaper VALUES (?,?,?,?,?,?,?,?,?)', row[:9])
-                    elif tabla == 'dnrpa':
-                        c.execute('INSERT OR IGNORE INTO dnrpa VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'bcra':
-                        c.execute('INSERT OR IGNORE INTO bcra VALUES (?,?,?,?,?,?,?,?)', row[:8])
-                    elif tabla == 'telefonos':
-                        c.execute('INSERT OR IGNORE INTO telefonos VALUES (?,?,?,?,?)', row[:5])
-                    elif tabla == 'emails':
-                        c.execute('INSERT OR IGNORE INTO emails VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'credenciales_url':
-                        c.execute('INSERT OR IGNORE INTO credenciales_url VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'guatemala_renap':
-                        c.execute('INSERT OR IGNORE INTO guatemala_renap VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'guatemala_sat':
-                        c.execute('INSERT OR IGNORE INTO guatemala_sat VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'mexico_imss':
-                        c.execute('INSERT OR IGNORE INTO mexico_imss VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'mexico_sat':
-                        c.execute('INSERT OR IGNORE INTO mexico_sat VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'salvador_dui':
-                        c.execute('INSERT OR IGNORE INTO salvador_dui VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'honduras_dni':
-                        c.execute('INSERT OR IGNORE INTO honduras_dni VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'chile_rc':
-                        c.execute('INSERT OR IGNORE INTO chile_rc VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'chile_sii':
-                        c.execute('INSERT OR IGNORE INTO chile_sii VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'brasil_cpf':
-                        c.execute('INSERT OR IGNORE INTO brasil_cpf VALUES (?,?,?,?,?,?)', row[:6])
-                    elif tabla == 'brasil_rf':
-                        c.execute('INSERT OR IGNORE INTO brasil_rf VALUES (?,?,?,?)', row[:4])
-                    elif tabla == 'ecuador_cedula':
-                        c.execute('INSERT OR IGNORE INTO ecuador_cedula VALUES (?,?,?,?,?,?)', row[:6])
-                except:
-                    pass
-        conn.commit()
-        conn.close()
-        print(f"✅ Cargados datos de {archivo}")
-    except Exception as e:
-        print(f"❌ Error cargando {archivo}: {e}")
+        ruta = os.path.join(bases_dir, archivo)
+        if os.path.exists(ruta):
+            try:
+                conn_real = sqlite3.connect(ruta)
+                c_real = conn_real.cursor()
+                c_real.execute(f"SELECT * FROM {tabla}")
+                datos = c_real.fetchall()
+                conn_real.close()
+                
+                if datos:
+                    placeholders = ','.join(['?'] * len(datos[0]))
+                    c.executemany(f"INSERT OR IGNORE INTO {tabla} VALUES ({placeholders})", datos)
+                    conn.commit()
+                    print(f"✅ Cargada {archivo} ({len(datos)} registros)")
+            except Exception as e:
+                print(f"❌ Error en {archivo}: {e}")
+    
+    conn.close()
 
 # ==================== FUNCIONES DE CONSULTA ====================
 
@@ -254,6 +194,23 @@ def consultar_renaper(dni):
     except:
         return None
 
+def consultar_deuda(cuil):
+    try:
+        cuil_clean = ''.join(filter(str.isdigit, cuil))
+        if len(cuil_clean) != 11:
+            return None
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('SELECT * FROM bcra WHERE cuil = ?', (cuil_clean,))
+        r = c.fetchone()
+        conn.close()
+        if r:
+            return {'dni': r[1], 'nombre': r[2], 'fecha_nac': r[3],
+                    'situacion': r[4], 'monto_deuda': r[5], 'entidades': r[6], 'score': r[7]}
+        return None
+    except:
+        return None
+
 def consultar_patente(patente):
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -263,24 +220,6 @@ def consultar_patente(patente):
         conn.close()
         if r:
             return {'marca': r[1], 'modelo': r[2], 'año': r[3], 'titular': r[4], 'dni_titular': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_deuda(cuil):
-    try:
-        cuil_clean = ''.join(filter(str.isdigit, cuil))
-        if len(cuil_clean) != 11:
-            return None
-        
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM bcra WHERE cuil = ?', (cuil_clean,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'dni': r[1], 'nombre': r[2], 'fecha_nac': r[3],
-                    'situacion': r[4], 'monto_deuda': r[5], 'entidades': r[6], 'score': r[7]}
         return None
     except:
         return None
@@ -311,203 +250,6 @@ def consultar_email(email):
     except:
         return None
 
-def buscar_credenciales_url(dominio):
-    credenciales = []
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT usuario, contraseña, fuente FROM credenciales_url WHERE dominio = ?', (dominio,))
-        for r in c.fetchall():
-            credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
-        c.execute('SELECT email, password, fuente FROM emails WHERE dominio = ?', (dominio,))
-        for r in c.fetchall():
-            credenciales.append({'usuario': r[0], 'contraseña': r[1], 'fuente': r[2]})
-        conn.close()
-    except:
-        pass
-    return credenciales
-
-# ==================== FUNCIONES PARA PAÍSES ====================
-
-def consultar_gt_dpi(dpi):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM guatemala_renap WHERE dpi = ?', (dpi,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'dpi': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_gt_nit(nit):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM guatemala_sat WHERE nit = ?', (nit,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'nit': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
-        return None
-    except:
-        return None
-
-def consultar_mx_imss(curp):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM mexico_imss WHERE curp = ?', (curp,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'curp': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'telefono': r[4], 'direccion': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_mx_sat(rfc):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM mexico_sat WHERE rfc = ?', (rfc,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'rfc': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
-        return None
-    except:
-        return None
-
-def consultar_sv_dui(dui):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM salvador_dui WHERE dui = ?', (dui,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'dui': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_hn_dni(dni):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM honduras_dni WHERE dni = ?', (dni,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'dni': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_cl_rc(rut):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM chile_rc WHERE rut = ?', (rut,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'rut': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_cl_sii(rut):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM chile_sii WHERE rut = ?', (rut,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'rut': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
-        return None
-    except:
-        return None
-
-def consultar_br_cpf(cpf):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM brasil_cpf WHERE cpf = ?', (cpf,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'cpf': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-def consultar_br_rf(cpf):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM brasil_rf WHERE cpf = ?', (cpf,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'cpf': r[0], 'nombre': r[1], 'direccion': r[2], 'telefono': r[3]}
-        return None
-    except:
-        return None
-
-def consultar_ec_cedula(cedula):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT * FROM ecuador_cedula WHERE cedula = ?', (cedula,))
-        r = c.fetchone()
-        conn.close()
-        if r:
-            return {'cedula': r[0], 'nombre': r[1], 'apellido': r[2], 'fecha_nac': r[3], 'direccion': r[4], 'telefono': r[5]}
-        return None
-    except:
-        return None
-
-# ==================== FUNCIONES DE RED ====================
-
-def geolocalizar_ip(ip):
-    try:
-        response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
-        data = response.json()
-        if data.get('status') == 'success':
-            return data
-    except: return None
-
-def escanear_puertos(host):
-    puertos = [21,22,23,25,53,80,110,135,139,143,443,445,993,995,1723,3306,3389,5432,5900,8080,8443]
-    servicios = {21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',80:'HTTP',110:'POP3',135:'RPC',139:'NetBIOS',143:'IMAP',443:'HTTPS',445:'SMB',993:'IMAPS',995:'POP3S',1723:'PPTP',3306:'MySQL',3389:'RDP',5432:'PostgreSQL',5900:'VNC',8080:'HTTP-Proxy',8443:'HTTPS-Alt'}
-    abiertos = []
-    try:
-        ip = socket.gethostbyname(host)
-        for p in puertos:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(0.5)
-                if s.connect_ex((ip, p)) == 0: abiertos.append(p)
-                s.close()
-            except: continue
-        return abiertos, servicios
-    except: return [], servicios
-
-def descubrir_subdominios(dominio):
-    subs = ['www','admin','dev','mail','ftp','api','test','login','app','blog','shop','support','docs','cdn','static','media','video','images','files','backup']
-    encontrados = []
-    for s in subs:
-        try:
-            socket.gethostbyname(f"{s}.{dominio}")
-            encontrados.append(f"{s}.{dominio}")
-        except: continue
-    return encontrados
-
 # ==================== SISTEMA DE TOKENS ====================
 
 user_tokens = {}
@@ -527,39 +269,30 @@ async def start(update, context):
     user_id = update.effective_user.id
     keyboard = [
         [InlineKeyboardButton("🇦🇷 Argentina", callback_data='arg_menu')],
-        [InlineKeyboardButton("🇬🇹 Guatemala", callback_data='gt_menu')],
-        [InlineKeyboardButton("🇲🇽 México", callback_data='mx_menu')],
-        [InlineKeyboardButton("🇸🇻 El Salvador", callback_data='sv_menu')],
-        [InlineKeyboardButton("🇭🇳 Honduras", callback_data='hn_menu')],
-        [InlineKeyboardButton("🇨🇱 Chile", callback_data='cl_menu')],
-        [InlineKeyboardButton("🇧🇷 Brasil", callback_data='br_menu')],
-        [InlineKeyboardButton("🇪🇨 Ecuador", callback_data='ec_menu')],
-        [InlineKeyboardButton("🔧 Red", callback_data='security')],
         [InlineKeyboardButton("💰 Tokens", callback_data='tokens')],
     ]
     await update.message.reply_text(
-        f"🕵️ *NINJA DATA BOT v62.0 - DATOS REALES*\n\n"
+        f"🤖 *NINJA DATA BOT*\n\n"
         f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"📌 *Países:* 8\n"
-        f"🌎 *Argentina, Guatemala, México, El Salvador,*\n"
-        f"   *Honduras, Chile, Brasil, Ecuador*\n\n"
-        f"💡 *Selecciona un país para ver sus comandos*",
+        f"/dni <dni> - RENAPER\n"
+        f"/deuda <cuil> - BCRA\n"
+        f"/dnrpa <patente> - DNRPA\n"
+        f"/email <email> - Filtraciones\n"
+        f"/titular <tel> - Teléfono\n"
+        f"/saldo - Ver tokens\n\n"
+        f"🔐 *Modo Fantasma: ACTIVADO*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
-# ==================== ARGENTINA ====================
-
 async def arg_menu(update, context):
     await update.callback_query.edit_message_text(
-        f"🇦🇷 *ARGENTINA - DATOS REALES*\n\n"
-        f"/dni <dni> - RENAPER (48M)\n"
-        f"/deuda <cuil> - BCRA (32M)\n"
-        f"/dnrpa <patente> - DNRPA (706K)\n"
+        f"🇦🇷 *ARGENTINA*\n\n"
+        f"/dni <dni> - RENAPER\n"
+        f"/deuda <cuil> - BCRA\n"
+        f"/dnrpa <patente> - DNRPA\n"
         f"/email <email> - Filtraciones\n"
-        f"/titular <tel> - Teléfono (100M)\n"
-        f"/url <dominio> - Credenciales\n"
-        f"/ip <ip> - Geolocalización\n\n"
+        f"/titular <tel> - Teléfono\n\n"
         f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
         parse_mode='Markdown'
     )
@@ -574,7 +307,7 @@ async def dni_command(update, context):
         return
     data = consultar_renaper(dni)
     if not data:
-        await update.message.reply_text(f"❌ DNI {dni} no encontrado en RENAPER.")
+        await update.message.reply_text(f"❌ DNI {dni} no encontrado.")
         return
     msg = f"📄 *RENAPER - DNI {dni}:*\n\n"
     msg += f"👤 {data['nombre']} {data['apellido']}\n"
@@ -596,18 +329,15 @@ async def deuda_command(update, context):
         return
     data = consultar_deuda(cuil)
     if not data:
-        await update.message.reply_text(f"❌ CUIL {cuil} no encontrado en BCRA.")
+        await update.message.reply_text(f"❌ CUIL {cuil} no encontrado.")
         return
     msg = f"📊 *BCRA - CUIL {cuil}:*\n\n"
-    if isinstance(data, dict):
-        msg += f"👤 {data.get('nombre', 'N/A')}\n"
-        msg += f"📈 Situación: {data.get('situacion', 'N/A')}\n"
-        msg += f"💸 Deuda: ${data.get('monto_deuda', 0):,}\n"
-        msg += f"🏦 Entidades: {data.get('entidades', 'N/A')}\n"
-        msg += f"📊 Score: {data.get('score', 'N/A')}\n"
-    else:
-        msg += f"📊 {json.dumps(data, indent=2, ensure_ascii=False)}"
-    msg += f"\n\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
+    msg += f"👤 {data['nombre']}\n"
+    msg += f"📈 Situación: {data['situacion']}\n"
+    msg += f"💸 Deuda: ${data['monto_deuda']:,}\n"
+    msg += f"🏦 Entidades: {data['entidades']}\n"
+    msg += f"📊 Score: {data['score']}\n"
+    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def dnrpa_command(update, context):
@@ -620,7 +350,7 @@ async def dnrpa_command(update, context):
         return
     data = consultar_patente(patente)
     if not data:
-        await update.message.reply_text(f"❌ Patente {patente} no encontrada en DNRPA.")
+        await update.message.reply_text(f"❌ Patente {patente} no encontrada.")
         return
     msg = f"🚘 *DNRPA - Patente {patente}:*\n\n"
     msg += f"🏭 Marca: {data['marca']}\n"
@@ -650,27 +380,6 @@ async def email_command(update, context):
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-async def url_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /url <dominio>")
-        return
-    domain = context.args[0].replace('http://', '').replace('https://', '').split('/')[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    await update.message.reply_text(f"🔍 Buscando credenciales para {domain}...")
-    data = buscar_credenciales_url(domain)
-    if data:
-        msg = f"🔴 *CREDENCIALES ENCONTRADAS* - {domain}\n\n"
-        for c in data[:20]:
-            msg += f"👤 Usuario: `{c['usuario']}`\n"
-            msg += f"🔑 Contraseña: `{c['contraseña']}`\n"
-            msg += f"📌 Fuente: {c['fuente']}\n\n"
-        msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-        await update.message.reply_text(msg, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(f"✅ No se encontraron credenciales para {domain}.", parse_mode='Markdown')
-
 async def titular_command(update, context):
     if not context.args:
         await update.message.reply_text("❌ /titular <tel>")
@@ -683,7 +392,7 @@ async def titular_command(update, context):
     if not data:
         await update.message.reply_text(f"❌ Teléfono {phone} no encontrado.")
         return
-    msg = f"📱 *OSINT - Teléfono {phone}:*\n\n"
+    msg = f"📱 *Teléfono {phone}:*\n\n"
     msg += f"👤 Titular: {data['titular']}\n"
     msg += f"🆔 DNI: {data['dni_titular']}\n"
     msg += f"📶 Compañía: {data['compania']}\n"
@@ -691,397 +400,19 @@ async def titular_command(update, context):
     msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-async def ip_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /ip <ip>")
-        return
-    ip = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = geolocalizar_ip(ip)
-    if not data:
-        await update.message.reply_text("❌ No se pudo geolocalizar.")
-        return
-    msg = f"📍 *Geolocalización IP {ip}:*\n\n"
-    msg += f"🌍 País: {data.get('country', 'N/A')}\n"
-    msg += f"🗺️ Región: {data.get('regionName', 'N/A')}\n"
-    msg += f"🏙️ Ciudad: {data.get('city', 'N/A')}\n"
-    msg += f"🔌 ISP: {data.get('isp', 'N/A')}\n"
-    msg += f"📌 Coordenadas: {data.get('lat', 'N/A')}, {data.get('lon', 'N/A')}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== GUATEMALA ====================
-
-async def gt_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇬🇹 *GUATEMALA - OSINT*\n\n"
-        f"/gt_dpi <dpi> - RENAP\n"
-        f"/gt_nit <nit> - SAT\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def gt_dpi_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /gt_dpi <dpi>")
-        return
-    dpi = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_gt_dpi(dpi)
-    if not data:
-        await update.message.reply_text(f"❌ DPI {dpi} no encontrado.")
-        return
-    msg = f"🇬🇹 *RENAP Guatemala - DPI {dpi}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"🆔 {data['dpi']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def gt_nit_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /gt_nit <nit>")
-        return
-    nit = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_gt_nit(nit)
-    if not data:
-        await update.message.reply_text(f"❌ NIT {nit} no encontrado.")
-        return
-    msg = f"🇬🇹 *SAT Guatemala - NIT {nit}:*\n\n"
-    msg += f"👤 {data['nombre']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== MÉXICO ====================
-
-async def mx_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇲🇽 *MÉXICO - OSINT*\n\n"
-        f"/mx_imss <curp> - IMSS\n"
-        f"/mx_sat <rfc> - SAT\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def mx_imss_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /mx_imss <curp>")
-        return
-    curp = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_mx_imss(curp)
-    if not data:
-        await update.message.reply_text(f"❌ CURP {curp} no encontrado.")
-        return
-    msg = f"🇲🇽 *IMSS - CURP {curp}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def mx_sat_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /mx_sat <rfc>")
-        return
-    rfc = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_mx_sat(rfc)
-    if not data:
-        await update.message.reply_text(f"❌ RFC {rfc} no encontrado.")
-        return
-    msg = f"🇲🇽 *SAT - RFC {rfc}:*\n\n"
-    msg += f"👤 {data['nombre']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== EL SALVADOR ====================
-
-async def sv_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇸🇻 *EL SALVADOR - OSINT*\n\n"
-        f"/sv_dui <dui> - DUI\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def sv_dui_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /sv_dui <dui>")
-        return
-    dui = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_sv_dui(dui)
-    if not data:
-        await update.message.reply_text(f"❌ DUI {dui} no encontrado.")
-        return
-    msg = f"🇸🇻 *DUI - {dui}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== HONDURAS ====================
-
-async def hn_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇭🇳 *HONDURAS - OSINT*\n\n"
-        f"/hn_dni <dni> - DNI\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def hn_dni_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /hn_dni <dni>")
-        return
-    dni = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_hn_dni(dni)
-    if not data:
-        await update.message.reply_text(f"❌ DNI {dni} no encontrado.")
-        return
-    msg = f"🇭🇳 *DNI - {dni}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== CHILE ====================
-
-async def cl_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇨🇱 *CHILE - OSINT*\n\n"
-        f"/cl_rc <rut> - Registro Civil\n"
-        f"/cl_sii <rut> - SII\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def cl_rc_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /cl_rc <rut>")
-        return
-    rut = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cl_rc(rut)
-    if not data:
-        await update.message.reply_text(f"❌ RUT {rut} no encontrado.")
-        return
-    msg = f"🇨🇱 *Registro Civil - RUT {rut}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def cl_sii_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /cl_sii <rut>")
-        return
-    rut = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_cl_sii(rut)
-    if not data:
-        await update.message.reply_text(f"❌ RUT {rut} no encontrado.")
-        return
-    msg = f"🇨🇱 *SII Chile - RUT {rut}:*\n\n"
-    msg += f"👤 {data['nombre']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== BRASIL ====================
-
-async def br_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇧🇷 *BRASIL - OSINT*\n\n"
-        f"/br_cpf <cpf> - CPF\n"
-        f"/br_rf <cpf> - Receita Federal\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def br_cpf_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /br_cpf <cpf>")
-        return
-    cpf = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_br_cpf(cpf)
-    if not data:
-        await update.message.reply_text(f"❌ CPF {cpf} no encontrado.")
-        return
-    msg = f"🇧🇷 *CPF - {cpf}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def br_rf_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /br_rf <cpf>")
-        return
-    cpf = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_br_rf(cpf)
-    if not data:
-        await update.message.reply_text(f"❌ CPF {cpf} no encontrado.")
-        return
-    msg = f"🇧🇷 *Receita Federal - CPF {cpf}:*\n\n"
-    msg += f"👤 {data['nombre']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== ECUADOR ====================
-
-async def ec_menu(update, context):
-    await update.callback_query.edit_message_text(
-        f"🇪🇨 *ECUADOR - OSINT*\n\n"
-        f"/ec_cedula <cedula> - Registro Civil\n\n"
-        f"💰 *Tokens:* {get_tokens(update.callback_query.from_user.id)}",
-        parse_mode='Markdown'
-    )
-
-async def ec_cedula_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /ec_cedula <cedula>")
-        return
-    cedula = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    data = consultar_ec_cedula(cedula)
-    if not data:
-        await update.message.reply_text(f"❌ Cédula {cedula} no encontrada.")
-        return
-    msg = f"🇪🇨 *Registro Civil - Cédula {cedula}:*\n\n"
-    msg += f"👤 {data['nombre']} {data['apellido']}\n"
-    msg += f"📅 {data['fecha_nac']}\n"
-    msg += f"📍 {data['direccion']}\n"
-    msg += f"📱 {data['telefono']}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-# ==================== COMANDOS DE RED ====================
-
-async def scan_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /scan <URL/IP>")
-        return
-    target = context.args[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    await update.message.reply_text(f"🔎 Escaneando {target}...")
-    puertos, servicios = escanear_puertos(target)
-    if not puertos:
-        await update.message.reply_text(f"🔒 No se encontraron puertos abiertos en {target}.")
-        return
-    msg = f"🔎 *Puertos abiertos en {target}:*\n\n"
-    for p in puertos:
-        msg += f"✅ Puerto {p} → {servicios.get(p, 'Desconocido')}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
-async def subdomain_command(update, context):
-    if not context.args:
-        await update.message.reply_text("❌ /subdomain <URL>")
-        return
-    dominio = context.args[0].replace('http://', '').replace('https://', '').split('/')[0]
-    if not usar_token(update.effective_user.id):
-        await update.message.reply_text("❌ Tokens insuficientes.")
-        return
-    subdominios = descubrir_subdominios(dominio)
-    if not subdominios:
-        await update.message.reply_text(f"🔍 No se encontraron subdominios para {dominio}.")
-        return
-    msg = f"🌐 *Subdominios encontrados para {dominio}:*\n\n"
-    for s in subdominios:
-        msg += f"🔹 {s}\n"
-    msg += f"\n💳 *Tokens restantes:* {get_tokens(update.effective_user.id)}"
-    await update.message.reply_text(msg, parse_mode='Markdown')
-
 async def saldo_command(update, context):
     user_id = update.effective_user.id
     await update.message.reply_text(
-        f"💰 *SALDO DE TOKENS*\n\n"
-        f"🔹 *Tokens:* {get_tokens(user_id)}\n"
-        f"💳 *Costo por consulta:* 1 token\n"
-        f"📊 *Consultas disponibles:* {get_tokens(user_id)}",
+        f"💰 *SALDO*\n\n"
+        f"🔹 *Tokens:* {get_tokens(user_id)}",
         parse_mode='Markdown'
     )
-
-# ==================== MANEJADOR DE BOTONES ====================
 
 async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
-    
     if query.data == 'arg_menu':
         await arg_menu(update, context)
-    elif query.data == 'gt_menu':
-        await gt_menu(update, context)
-    elif query.data == 'mx_menu':
-        await mx_menu(update, context)
-    elif query.data == 'sv_menu':
-        await sv_menu(update, context)
-    elif query.data == 'hn_menu':
-        await hn_menu(update, context)
-    elif query.data == 'cl_menu':
-        await cl_menu(update, context)
-    elif query.data == 'br_menu':
-        await br_menu(update, context)
-    elif query.data == 'ec_menu':
-        await ec_menu(update, context)
-    elif query.data == 'security':
-        await query.edit_message_text(
-            f"🔧 *RED Y SEGURIDAD*\n\n"
-            f"/scan <URL/IP> - Puertos\n"
-            f"/subdomain <URL> - Subdominios\n\n"
-            f"💰 *Tokens:* {get_tokens(query.from_user.id)}",
-            parse_mode='Markdown'
-        )
     elif query.data == 'tokens':
         await query.edit_message_text(
             f"💰 *Tokens: {get_tokens(query.from_user.id)}*",
@@ -1095,66 +426,29 @@ def main():
         print("🚀 Iniciando NINJA DATA BOT...")
         init_db()
         
-        # Iniciar Flask
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
-        print("🌐 Flask server iniciado en puerto 8080")
+        print("🌐 Flask server iniciado")
         
-        # Iniciar Bot
         app = Application.builder().token(base64.b64decode(TOKEN).decode()).build()
         
-        # Argentina
+        app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("dni", dni_command))
         app.add_handler(CommandHandler("deuda", deuda_command))
         app.add_handler(CommandHandler("dnrpa", dnrpa_command))
         app.add_handler(CommandHandler("email", email_command))
         app.add_handler(CommandHandler("titular", titular_command))
-        app.add_handler(CommandHandler("url", url_command))
-        app.add_handler(CommandHandler("ip", ip_command))
-        
-        # Guatemala
-        app.add_handler(CommandHandler("gt_dpi", gt_dpi_command))
-        app.add_handler(CommandHandler("gt_nit", gt_nit_command))
-        
-        # México
-        app.add_handler(CommandHandler("mx_imss", mx_imss_command))
-        app.add_handler(CommandHandler("mx_sat", mx_sat_command))
-        
-        # El Salvador
-        app.add_handler(CommandHandler("sv_dui", sv_dui_command))
-        
-        # Honduras
-        app.add_handler(CommandHandler("hn_dni", hn_dni_command))
-        
-        # Chile
-        app.add_handler(CommandHandler("cl_rc", cl_rc_command))
-        app.add_handler(CommandHandler("cl_sii", cl_sii_command))
-        
-        # Brasil
-        app.add_handler(CommandHandler("br_cpf", br_cpf_command))
-        app.add_handler(CommandHandler("br_rf", br_rf_command))
-        
-        # Ecuador
-        app.add_handler(CommandHandler("ec_cedula", ec_cedula_command))
-        
-        # Red
-        app.add_handler(CommandHandler("scan", scan_command))
-        app.add_handler(CommandHandler("subdomain", subdomain_command))
-        
-        # Generales
-        app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("saldo", saldo_command))
-        
         app.add_handler(CallbackQueryHandler(button_handler))
         
-        print("✅ NINJA DATA BOT v62.0 - ACTIVO")
-        print("📊 8 países integrados")
+        print("✅ NINJA DATA BOT - ACTIVO")
         print("🔐 Modo Fantasma: ACTIVADO")
+        print("📁 Bases de datos en: databases/")
         
         app.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO: {e}")
+        print(f"❌ ERROR: {e}")
 
 if __name__ == '__main__':
     main()
