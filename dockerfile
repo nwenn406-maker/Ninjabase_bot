@@ -1,4 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
+
+# Instalar Nmap (herramienta del sistema)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends nmap && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -7,4 +12,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "app.py"]
+CMD ["python", "bot.py"]
